@@ -46,3 +46,23 @@ Product principles in [principles.md](../product/principles.md) are also decisio
 | [0005](0005-money-and-xp-are-separate.md) | Money and XP are separate reward systems | accepted |
 | [0006](0006-no-bank-integration-in-v1.md) | No bank connection in V1 | accepted |
 | [0007](0007-working-name.md) | `sidehustle` is a technical name only | accepted |
+| [0008](0008-money-in-minor-units.md) | Money is integer minor units plus a currency code | accepted |
+| [0009](0009-financial-impact-ledger.md) | Realized money is an impact ledger | accepted |
+| [0010](0010-xp-event-ledger.md) | XP is an event ledger | accepted |
+| [0011](0011-status-and-stage.md) | Normalized status, flexible stage string | accepted |
+| [0012](0012-goal-included-types.md) | Goals choose which opportunity types count | accepted |
+| [0013](0013-sanctum-session-auth.md) | Session cookie auth for the web client | accepted |
+| [0014](0014-explicit-settlement.md) | Settlement is an explicit API choice | accepted |
+| [0015](0015-reopen-without-status-history.md) | Reopen clears timestamps, no status log | accepted |
+| [0016](0016-goal-rhythm.md) | Weekly, monthly, or dated goal periods | accepted |
+| [0017](0017-personalization-storage.md) | Profile row plus skill rows | accepted |
+| [0018](0018-playbooks.md) | Four playbooks, no workflow engine | accepted |
+| [0019](0019-system-owned-xp.md) | The server assigns XP | accepted |
+| [0020](0020-state-driven-playbook-actions.md) | Playbooks create the next action only | accepted |
+| [0021](0021-scheduled-action-availability.md) | A due date makes an action available when read | accepted |
+| [0022](0022-playbook-outcomes.md) | Close reasons are outcomes, not extra statuses | accepted |
+| [0023](0023-paused-status.md) | Paused is its own status | accepted |
+| [0024](0024-proposal-agreed-realized.md) | Proposed, agreed, and received stay separate | accepted |
+| [0025](0025-multiple-work-areas.md) | A profile can have several work areas | accepted |
+| [0026](0026-product-ui-language.md) | Money certainty, Missions naming, onboarding ends on Home | accepted |
+| [0027](0027-sell-item.md) | A sell item is not the opportunity | accepted |

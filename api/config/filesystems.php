@@ -16,6 +16,13 @@ return [
     'default' => env('FILESYSTEM_DISK', 'local'),
 
     /*
+    | Sell photos use the public disk in local development.
+    | Set SELL_PHOTO_DISK=s3 once a bucket is configured. The API then
+    | returns a temporary URL instead of a public /storage path.
+    */
+    'sell_disk' => env('SELL_PHOTO_DISK', 'public'),
+
+    /*
     |--------------------------------------------------------------------------
     | Filesystem Disks
     |--------------------------------------------------------------------------

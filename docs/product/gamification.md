@@ -12,9 +12,25 @@ Rules live in the [money model](money-model.md). The goal display is more promin
 
 **Decision.** XP represents effort, progress, and momentum. The user can earn XP for a meaningful action before any money lands.
 
+**Decision.** XP is a ledger of `xp_events`. The user's total is the sum of those events. There is no `xp_total` column on the user. Events are not frozen by a database trigger. See [0010](../decisions/0010-xp-event-ledger.md).
+
+**Decision.** An action may store an intended XP reward. Completing the action writes one event for that amount, tied to the action, and will not write a second one. A null or zero reward completes the action and writes nothing. The awarded event is the history. Editing the intended reward later does not rewrite the event.
+
 **Decision.** Creating or planning something generally earns less XP than moving an opportunity forward or completing it.
 
-**Decision.** Outcomes such as publishing a listing, sending a proposal, completing a sale, or receiving payment may also grant milestone XP. The amounts are not decided.
+**Decision.** The client does not choose XP. See [0019](../decisions/0019-system-owned-xp.md). Playbook steps use the first implemented economy (10 / 15 / 25). Reporting an external result, such as "they accepted", does not award XP by itself. Following up, sending the proposal, and finishing the work do, because those are effort. A payment writes an `outcome_bonus` only for thresholds the cumulative realized total crosses for the first time: €100, €500, and €1,000 are separate and are not repeated on a later partial payment. A single payment that crosses more than one threshold awards each of them. Completing an opportunity does not award XP by itself.
+
+### First implemented economy
+
+**These constants are tunable.** They are what the code awards today, not a promise that the scale never changes.
+
+| Kind | XP |
+| --- | --- |
+| Small setup or research | 10 |
+| Preparation | 15 |
+| Milestone (list, proposal, outreach, the work, the invoice) | 25 |
+| Result, including "I got paid" | 25 |
+| Realized €100 / €500 / €1,000 | +10 / +20 / +30, once each, when the mission's cumulative realized total first crosses that threshold |
 
 ### Exploratory effort scale
 

@@ -1,8 +1,17 @@
 # Progress
 
-**Not implemented.** Product intent only.
-
 **Decision.** Progress is a personal scorecard and game history. It is not finance analytics software. Home does not absorb these charts.
+
+## Implemented
+
+A period switch: this goal (default), 7 days, 30 days, year, all time.
+
+- **Banked.** The realized total for the period in large green type, then a stacked bar and four figures: Earned, Sold, Recovered, Saved. One line says they stay separate. With nothing banked, the panel says so and links to Discover.
+- **Over time.** Simple bars of the `series` the API returns (daily, or monthly for a year), with the best day or month. Plain views, no chart library. Hidden for all time and when every point is zero.
+- **Goal.** The current goal's banked/target, meter, percentage, and days left.
+- **Effort.** XP in the period (yellow), steps done, missions closed, and XP all time.
+
+No level is shown. The curve is not decided, and inventing one in the client would be a fake system.
 
 ## Lifetime impact
 

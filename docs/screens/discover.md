@@ -1,79 +1,27 @@
 # Discover
 
-**Not implemented.** Product intent only.
+**Decision.** Discover is not a destination. `/discover` redirects into the cockpit that owns the tool: Money Hunt to Sell, skills to Freelance, recovery to Recover, a cost review to All activity. The tools themselves are unchanged and still deterministic. They do not promise income. See [cockpits](../product/cockpits.md).
 
-**Decision.** Discover is not an infinite feed of side-hustle articles.
+The description below is what each tool still does, now inside its cockpit.
 
-Its purpose:
+The page lists four places money tends to hide, each tied to a type. Choosing one opens its guided panel beside the list. Home's starter missions link straight to a tool with `?tool=hunt|skills|recovery|expenses`.
 
-> Find financial opportunities the user has not put in motion yet.
+## Money Hunt (Sell)
 
-**Decision.** Discover should turn a finding into an Opportunity. Reading is not the outcome.
+Category tiles: wardrobe, electronics, jewelry/metals, collectibles, tools, sports/hobby gear, furniture, storage. Choosing one shows a short prompt for where to look, then "What did you find?" and an optional rough value. A blank value makes valuing the first step. The prompts and example names live in the client. They are fixed copy, not generated.
 
-**Decision.** Prefer progressing a strong existing opportunity over generating another idea. Discover should be willing to say "do the next action on something you already have."
+## Your skills (Earn)
 
-## Best next opportunities
+The user's skills as small tags with a link to edit them, then the skill missions from the API. Each shows which work area it came from. Several work areas can each contribute missions ([0025](../decisions/0025-multiple-work-areas.md)). Starting one creates a freelance mission at "not contacted yet".
 
-**Likely V1.** Personalized recommendations using:
+## Money owed to you (Recover)
 
-- skills
-- experience
-- preferences
-- available time
-- existing opportunities
-- prior successes
-- asset categories
-- willingness to invest money
+Kinds: a friend or relative, a client invoice, a refund, a reimbursement, a tax filing. Then what it is for, a rough amount, and an "I expect it by" date. Both are optional.
 
-**Open.** How weak the first version of this can be and still be honest. A few hand-built prompts that use onboarding answers are more in scope than a separate recommendation service. See [architecture](../technical/architecture.md).
+## Expense audit (Save)
 
-## Guided sessions
+Quick picks for common recurring costs fill the name. The monthly amount is optional. One line explains that a cut counts this month's difference and the yearly figure is not counted.
 
-**Assumption.** These are tools, not content channels. Which of them are in the first usable version is not cut yet. See [roadmap/v1.md](../roadmap/v1.md).
+Starting capital is stored on the profile and does not affect anything here.
 
-### Money Hunt
-
-Find unused possessions worth selling.
-
-Categories may include wardrobe, electronics, gaming, collectibles, jewelry and metals, tools, sports, furniture, and storage.
-
-The exercise creates Sell opportunities. It is the full version of the lightweight asset scan in [onboarding](onboarding.md). Do not run this full hunt during onboarding.
-
-### Skill Miner
-
-Explore ways to monetize skills the user already has. Avoid generic low-quality suggestions.
-
-For an experienced software developer, examples of the right altitude are: a fixed-price technical audit, freelance development, consulting, a paid technical product, a niche developer tool.
-
-### Network Scan
-
-Find people or companies worth contacting.
-
-Prompts may include previous colleagues, previous clients, founders, recruiters, agencies, and previous inbound leads.
-
-### Money Recovery
-
-Discover money people owe, unpaid invoices, reimbursements, refunds, claims, taxes, and deposits. Findings become Recover opportunities.
-
-### Expense Audit
-
-Find recurring expenditure that can realistically be reduced. Findings become Save opportunities. Recurring amounts follow the [money model](../product/money-model.md).
-
-### Quick Wins
-
-Given an amount of free time, find the best useful action right now. This overlaps Home's "what should I do now?" **Open** whether they are the same suggestion engine or two entry points.
-
-## Feedback
-
-**Likely V1.** Discover should learn from explicit feedback:
-
-- Interested
-- Not for me
-- Already doing this
-- Too much effort
-- Not enough return
-- Never suggest this category
-
-**Assumption.** "Interested" creates or keeps an opportunity. "Already doing this" should attach to an existing opportunity rather than duplicate it. The other responses suppress that suggestion or category.
-
-**Open.** How long a suppression lasts, and whether "Never suggest this category" is the same control as the personalization settings.
+**Later.** The rest of the original Discover catalog (local demand, skills the user could learn, and so on).

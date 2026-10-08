@@ -1,6 +1,12 @@
 # Settings
 
-**Not implemented.** Product intent only.
+The route is `/settings`. The navigation calls it "Profile & settings" and shows it as the user's name at the bottom of the rail. Three tabs (`?tab=profile|goal|account`):
+
+- **What you bring** (default). Work areas (multi-select), each skill with its own level and a remove button, suggested skills from the selected areas, a custom skill, overall experience, what the user is open to grouped by type, "rather not", the current situation, time available, and starting capital. A sticky save bar confirms "Saved. Suggestions updated." Starting capital is labelled as stored and not yet used.
+- **Goal.** Banked against target, the rhythm in words, the target amount, and dates for a by-date goal. Changing the target never touches banked money.
+- **Account.** Name, email, Log out. Delete account is a separate, quieter section below. It asks for the current password and a second confirmation, then removes the user and the data that belongs to them. The session ends. The same email can register again.
+
+Notifications, a public profile, and friends stay later.
 
 **Decision.** Settings stays simpler than the rest of the product. It is a place to change facts the product already uses, not a second product surface.
 

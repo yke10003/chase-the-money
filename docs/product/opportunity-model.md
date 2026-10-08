@@ -6,7 +6,7 @@ Opportunity is the central domain concept.
 
 > What could improve my financial position, how much might it be worth, where is it now, and what should I do next?
 
-Do not design the database schema from this page. The backend domain model is still to be designed. Properties and stages below are the conceptual model only.
+The Laravel model is implemented. See [Implemented model](#implemented-model) and [0008](../decisions/0008-money-in-minor-units.md) through [0011](../decisions/0011-status-and-stage.md). Stages below are the initial vocabulary, not a final state machine.
 
 ## Types
 
@@ -42,36 +42,55 @@ Examples: cancel an unused subscription, downgrade a service, renegotiate a recu
 
 The founder fixture calls this out: a possible cost from a legal dispute with a landlord is not part of the hustle. If there is an action that can reduce or avoid such a cost, that action could qualify as Save or Recover. The liability itself does not.
 
-## Likely properties
+## Implemented model
 
-**Assumption.** An opportunity will eventually need something like:
+**Decision.** An opportunity is one row. It belongs to a user.
 
-- type: Earn, Sell, Recover, or Save
-- title
-- current status or stage
-- estimated or potential amount, possibly as a range
-- expected amount, where there is a concrete path
-- realized amount
-- next action
-- expected date or deadline, when relevant
-- rough effort
-- notes
-- external links
-- timestamps and history
+Stored today:
 
-**Open.** Exact fields, whether amounts are single values or ranges, and how history is stored. Do not add product migrations until this is designed.
+- type: `earn`, `sell`, `recover`, or `save`
+- title and notes
+- normalized status: `explore`, `active`, `waiting`, `paused`, `completed`, `abandoned`
+- stage: a nullable string, checked against the vocabulary below in PHP, not a database enum
+- `outcome`: why a guided mission ended, nullable. See [0022](../decisions/0022-playbook-outcomes.md)
+- potential minimum and maximum, in minor units, each nullable
+- `agreed_amount_minor`, nullable. See [0024](../decisions/0024-proposal-agreed-realized.md)
+- expected amount, in minor units, nullable. After a partial payment this is what is still expected
+- currency, an ISO code stored on the row
+- `expected_on`, a nullable date
+- rough effort: `tiny`, `small`, `medium`, `large`, `major`, nullable
+- `completed_at` and `abandoned_at`
+
+**Decision.** Potential and expected describe the current estimate. They are not realized history. Both can be unknown. A point estimate sets minimum and maximum to the same value. A range sets both. See [money model](money-model.md).
+
+**Decision.** Realized money is not a column on the opportunity. It is the sum of [financial impact](money-model.md) rows.
+
+**Decision.** The next action is the first open action by `sort_order`, then id. It is not stored separately.
+
+**Decision.** Normalized status and stage are independent. Changing a stage does not move the status, and completing an opportunity does not force a stage such as `paid`. The mapping suggested below is still open.
+
+**Decision.** Completing or abandoning an opportunity keeps its actions and financial impacts. Completion does not by itself record money or XP. `completed_at` is the current completion time. Reopening into `explore`, `active`, or `waiting` clears `completed_at` and `abandoned_at`. There is no status-history table. See [0015](../decisions/0015-reopen-without-status-history.md).
+
+**Deferred.** External links are not a column. A URL can sit in notes until that is worth its own field.
+
+**Deferred.** "Needs attention" is not stored. The rules are still open. `expected_on` and `updated_at` are enough to derive a flag later.
+
+## Likely properties that are still open
+
+**Open.** Whether abandoned opportunities get their own filter chip. The status exists. The Opportunities screen list does not include that chip yet. See [Opportunities](../screens/opportunities.md).
 
 ## Lifecycle
 
-**Assumption.** There is a normalized conceptual lifecycle used for filters and cross-type reporting:
+**Decision.** Normalized status, used for filters and cross-type reporting, is:
 
 - Explore
 - Active
 - Waiting
+- Paused
 - Completed
 - Abandoned
 
-**Assumption.** The user-facing stages are domain-specific. They are still subject to refinement when the backend model is designed. Do not treat the lists below as a final state machine.
+**Decision.** User-facing stages are strings, one vocabulary per type. The lists below are the initial catalog in `OpportunityStageCatalog`. They are not a database enum and not a final state machine. Adding or renaming a stage is a code change, not a migration. A stage from the wrong type is rejected.
 
 ### Earn
 
@@ -79,7 +98,7 @@ Idea → Contact → Proposal → Agreed → Working → Invoiced → Paid
 
 ### Sell
 
-Idea → Valuing → Ready to list → Listed → Offer → Sold → Paid
+Idea → Valuing → Preparing → Ready to list → Listed → Offer → Sold → Paid
 
 ### Recover
 
@@ -91,11 +110,15 @@ Identified → Reviewing → Action taken → Confirmed
 
 **Open.** How conceptual states map onto these stages. A reasonable reading is that "Idea" / "Identified" are Explore, mid-stages are Active, stages such as "awaiting payment" or "awaiting response" are Waiting, and Paid / Received / Confirmed are Completed. That mapping is not agreed.
 
-**Open.** Whether Abandoned is a user-facing stage, a hidden status, or both. The Opportunities filters currently discussed do not include an Abandoned chip. See [Opportunities](../screens/opportunities.md).
+**Open.** Whether the Opportunities screen gets an Abandoned chip. Abandoned is a normalized status, not one of the type-specific stages. See [Opportunities](../screens/opportunities.md).
 
 ## Actions
 
-**Decision.** An opportunity can have concrete actions. Much of the XP system operates here. The product rewards doing the work, not only filing the idea.
+**Decision.** Actions are their own rows. Completing one keeps it. It is not deleted.
+
+An action has a title, optional description, open/completed status, optional estimated minutes, an optional intended XP reward, a sort order, an optional `due_on` calendar date, and `completed_at`. A null duration is allowed for a milestone such as finishing freelance work. See [0021](../decisions/0021-scheduled-action-availability.md).
+
+The intended XP reward is not the ledger. Completing the action writes one XP event for that reward, and a second completion does not write another. The sketch XP numbers are still not constants. See [gamification](gamification.md).
 
 Example for a Versace jacket:
 
@@ -106,9 +129,7 @@ Example for a Versace jacket:
 - review an offer
 - confirm payment
 
-**Assumption.** Each opportunity has one prominent next action. Other actions can exist as a list.
-
-**Open.** Whether actions are a separate stored entity, a checklist on the opportunity, or both. Do not build that storage yet.
+**Decision.** Each opportunity has one derived next action: the first open action. The rest of the list stays visible.
 
 ## Needs attention
 
@@ -124,7 +145,7 @@ Example for a Versace jacket:
 
 ## Waiting
 
-**Decision.** When an opportunity is in a waiting state, the product says that nothing is currently required. Waiting is a valid state, not a failure to use the app.
+**Decision.** When an opportunity is in a waiting state and its next action is not due yet, the product says that nothing is currently required. Waiting is a valid state, not a failure to use the app. Once `due_on` arrives, that action is the next thing to do even if the status is still waiting.
 
 ## Completed
 

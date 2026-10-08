@@ -1,113 +1,56 @@
 # Home
 
-**Not implemented.** Product intent only.
+**Decision.** Home is a command center, not a finance dashboard. It answers four questions in this order: where am I against the goal, what money is moving, what should I do now, and am I making progress. Charts belong on [Progress](progress.md).
 
-**Decision.** Home is a command center. It is not a finance dashboard and it is not an analytics page. Charts belong on [Progress](progress.md), if they ship.
+**Decision.** A new Home is never only "nothing to do". If no action fits, it shows the starter missions from the first plan. Each opens a real flow. The screen does not explain how actions are sorted.
 
 The real-money goal is more prominent than XP.
 
-## 1. Monthly / current goal hero
+## 1. Goal hero
 
-**Decision.** This is the top of the page.
+The period name and days left ("October goal · 25 days left"), the banked figure in large type, the target, and a goal meter with 25/50/75% ticks. Only banked money fills it.
 
-Example:
+One line under the meter says where things stand: nothing banked yet and how long is left, what remains and roughly how much per week, or "Goal reached. Everything from here is extra." The per-week figure is plain arithmetic, not a forecast.
 
-```text
-October goal
-€650 / €2,000
-€1,350 remaining
-```
+Beside the hero on wide screens, and below it otherwise: **In motion, not banked yet.** Expected (striped mark, "agreed or promised"), possible as a range (dotted mark, "estimates and quotes"), and how many open missions have no figure. These never add into the banked number. See [money model](../product/money-model.md) and [0026](../decisions/0026-product-ui-language.md).
 
-Secondary figures may include:
+After onboarding, a one-time dark welcome band reads the goal back and points to the first moves.
 
-```text
-€650 realized
-€3,850 expected
-€8,000 potential
-```
+## Cockpits
 
-**Decision.** Only realized money fills the goal. Expected and potential are context. See [money model](../product/money-model.md).
+Once the account has anything at all, Home shows four cards: Sell, Freelance, Build, Recover. Each uses real open records. Build says "Nothing in progress" until a product exists, and it never borrows freelance work to look busy. A brand new account does not get the cards; the starter moves below are the way in, and each one opens the cockpit that owns it.
 
-The month name and the amounts are examples from the [founder fixture](../product/founder-fixture.md), not default data.
+## 2. What can I do now?
 
-## 2. What should I do now?
+**Decision.** The most prominent block. A time filter (10 min, 30 min, 1 hour, Any) appears once the user has open missions.
 
-**Decision.** This block is highly prominent.
+- The first suggested action is a large "Next move" card: why it is surfaced (Overdue, Due today, Due soon, Quick win, or Waiting on you), the action, the mission, the time and XP, and one button into the mission.
+- Other suggestions are compact rows.
+- With a time filter, actions without an estimate appear under "Bigger pieces, when you have the time".
+- With no suggestion, starter missions appear as a 2×2 grid. The first one is marked "Start here". The heading depends on the account: first moves for a new user, "Nothing needs you right now" when missions are only waiting, "All clear. Ready for the next one?" when everything is finished, and a short note when nothing fits the chosen time.
 
-The user can say roughly how much time they have:
+Suggestions come from the server's `suggested_actions`. The client does not re-rank them.
 
-- 10 min
-- 30 min
-- 1 hour
-- Deep work
+## 3. Side column
 
-The product then suggests relevant existing actions.
+Shown only when it has content. The main column takes the full width otherwise.
 
-Examples:
+- **Waiting on others.** Open missions whose next action is dated in the future: the state, when to check, and the money with its certainty mark. They move into "What can I do now?" on the day.
+- **This week.** XP (yellow), steps done, missions closed. Hidden until something happened this week.
+- **Recent wins.** Banked amounts in green and XP in yellow. Server XP descriptions such as "Outcome bonus at €500" are shown as "Milestone bonus: first €500 on a mission".
 
-| Time | Suggestion |
-| --- | --- |
-| 10 min | Message a previous colleague. |
-| 30 min | Research Versace resale value. |
-| 1 hour | Photograph and list an old outfit. |
+## Likely V1, not built
 
-**Assumption.** Suggestions come from actions already on opportunities before Discover invents new work. That matches principle 10.
+- Weekly quests and a rough level inside "This week", secondary to money. Quest copy and the XP curve are not decided. See [gamification](../product/gamification.md).
+- One proactive coaching prompt, for example "Your freelance pipeline depends on one deal." One suggestion, not a feed, and suppressible.
 
-**Open.** The exact time buckets, and what to show when nothing on the board fits the selected time. A fallback into a short Discover prompt (Quick Wins) is plausible and not decided.
+## Removed from Home
 
-## 3. Money in motion
-
-**Likely V1.** A compact list of opportunities already underway.
-
-Examples:
-
-- €250 friend repayment — expected
-- €3,000 invoice — payment pending
-- ~€400 Versace jacket — needs valuation
-- freelance proposal — awaiting response
-
-The €3,000 invoice is an illustration. The founder fixture does not state that invoice amount. Do not treat €3,000 as fixture data. See [founder fixture](../product/founder-fixture.md).
-
-**Decision.** A waiting item can appear here and should still read as "nothing required right now" when that is the case. See [opportunity detail](opportunity-detail.md).
-
-## 4. Weekly momentum
-
-**Likely V1.** Show weekly XP, active quests, and a rough level. Keep this secondary to the money goal.
-
-Quest copy and the XP curve are not finalized. See [gamification](../product/gamification.md).
-
-## 5. Opportunity snapshot
-
-**Likely V1.** A quick overview of Earn, Sell, Recover, and Save with active counts and a rough value.
-
-**Open.** Which amount the "rough value" uses. It must not be a single number that adds potential to realized. Prefer a per-type potential or expected figure, labeled as such.
-
-## 6. Proactive suggestion
-
-**Likely V1.** One coaching or discovery prompt.
-
-Examples:
-
-- "You probably have more money hiding around your house."
-- "Your freelance pipeline currently depends on one deal."
-
-**Assumption.** This is one suggestion, not a feed. It should be suppressible once Discover learns "not for me" or "never suggest this category."
-
-## 7. Recent wins
-
-**Likely V1.** A short activity list of meaningful events.
-
-Examples:
-
-- +€250 payment confirmed
-- +50 XP proposal sent
-- achievement unlocked
-
-**Decision.** Do not expand this into an analytics timeline. The +50 XP figure is illustrative, not the award for sending a proposal.
+The per-type snapshot. Type filters on [Missions](opportunities.md) and the breakdown on [Progress](progress.md) cover it without adding another block to Home.
 
 ## Explicitly out of scope for Home
 
 - category-over-time charts
 - bank balances
-- a full opportunity board (that is [Opportunities](opportunities.md))
+- a full opportunity board (that is [Missions](opportunities.md))
 - social leaderboards

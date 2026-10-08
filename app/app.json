@@ -6,7 +6,7 @@
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "sidehustle",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "light",
     "ios": {
       "icon": "./assets/expo.icon"
     },
@@ -32,10 +32,18 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
         }
+      ],
+      "expo-font",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow photos so you can add pictures of what you're selling.",
+          "cameraPermission": "Allow the camera so you can photograph what you're selling."
+        }
       ]
     ],
     "experiments": {
-      "typedRoutes": true
+      "typedRoutes": false
     }
   }
 }

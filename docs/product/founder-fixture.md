@@ -1,6 +1,8 @@
 # Founder fixture
 
-**Decision.** Use this as the main realistic scenario in design, copy, and manual testing. It is the founder's current situation, not a database seeder and not a promise that these records ship as demo data.
+**Decision.** Use this as the main realistic scenario in design, copy, and manual testing.
+
+`FounderFixtureSeeder` is an opt-in demo of this scenario. It is not run by the default seeder and not by migrations. It creates the founder profile and the missions through the current playbooks, one next action each. The Versace row stores a potential range of €400–€600 as demo data for "around €400", and the next step is still to figure out what it is worth. The Halloween outfit starts from a known €200 and the next step is to get it ready. The silver value stays unknown. The freelance proposal is waiting, with a follow-up on 2026-10-13 and no amount, because this fixture does not invent one. The outstanding invoice has no amount, so the next step is to write that down. The friend repayment is €250 expected on 2026-10-20, waiting until that date. Nothing in the fixture is realized, so the seeder writes no financial impacts.
 
 Examples use euros. That does not by itself decide the product's default currency. See [money model](money-model.md).
 
@@ -9,7 +11,7 @@ Examples use euros. That does not by itself decide the product's default currenc
 - There is a potential freelance job.
 - A proposal is being sent or is awaiting a response.
 - The user does not want the pipeline to depend on that one lead.
-- About 10 previous peers or colleagues could be contacted.
+- A separate mission, "Contact previous colleagues", is a lead with no amount attached. About 10 previous peers could be contacted. It is not a second copy of the proposal.
 - A LinkedIn availability post could be published.
 - The user wants to track whether the proposal is accepted and how much money eventually results.
 

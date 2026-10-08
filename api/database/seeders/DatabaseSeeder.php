@@ -21,5 +21,7 @@ class DatabaseSeeder extends Seeder
             'name' => 'Test User',
             'email' => 'test@example.com',
         ]);
+
+        // FounderFixtureSeeder is opt-in demo data. Do not call it from here.
     }
 }

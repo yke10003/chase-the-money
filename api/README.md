@@ -19,3 +19,7 @@ The process listens on `http://localhost:8000`.
 - `GET /up` is Laravel's health check
 
 `php artisan dev` also starts the queue listener and log tail alongside the server. There is no Vite frontend in this app.
+
+Product routes live under `/api/v1`. Auth is a session cookie. See [docs/technical/api.md](../docs/technical/api.md).
+
+`php artisan db:seed --class=FounderFixtureSeeder` loads the founder scenario (`founder@example.test` / `password`). The default seeder does not.

@@ -14,20 +14,49 @@ Do not introduce microservices, an event bus, a separate recommendation service,
 
 ## What exists today
 
-These are scaffold facts, not product decisions.
+This is what the repository contains today. Product rules stay in `docs/product/`.
 
 | Piece | Current state |
 | --- | --- |
 | `/api` | Laravel 13.35 (skeleton 13.11) on PHP 8.3+ (this machine: 8.4). JSON only. `GET /` and `GET /api/status` return a status payload. `GET /up` is Laravel's health route. |
 | `/app` | Expo SDK 57, Expo Router, TypeScript, React Native Web. One placeholder screen. |
 | Database | The Laravel skeleton uses SQLite locally so the app can boot. Production database is not chosen. |
-| Migrations | Only the framework defaults: `users`, `cache`, `jobs`. These are not the product schema. |
-| Auth | Not implemented. The stock `User` model shipped with Laravel. No Sanctum, Fortify, or session login UI. |
+| Migrations | Framework defaults (`users`, `cache`, `jobs`) plus `goals`, `opportunities`, `opportunity_actions`, `financial_impacts`, and `xp_events`. |
+| Domain behavior | Complete an action (XP once), record a realized impact, settle explicitly, complete, abandon, or reopen an opportunity, and read period metrics. |
+| HTTP | `/api/v1` JSON for auth, goals, opportunities, actions, impacts, Home, and Progress. See [api.md](api.md). |
+| Auth | Sanctum session cookies for Expo Web. No token login and no social login. See [0013](../decisions/0013-sanctum-session-auth.md). |
 | Frontend in the API | None. Vite and the Laravel welcome page were removed so this repo does not grow a second UI. |
 | Client state | Component state only. No state library and no server-cache library. |
 | Jobs, mail, files | Laravel's defaults (database queue, log mailer, local disk). Nothing product-specific is queued or emailed. |
 
 `php artisan dev` starts the HTTP server, a queue listener, and the log tail. It does not start a Vite process.
+
+## Domain model
+
+Eloquent models, PHP backed enums, and a few small domain types. No repositories, no event store, no workflow engine.
+
+```text
+User
+ ├── Goal
+ ├── Opportunity
+ │    └── OpportunityAction
+ ├── FinancialImpact
+ └── XpEvent
+```
+
+Money is integer minor units plus a currency code on the row. See [0008](../decisions/0008-money-in-minor-units.md).
+
+Realized money is `financial_impacts`. Expected and potential live on the opportunity and are never added into that ledger by a query. A Save row may carry a monthly or yearly recurring amount; the annualized number is calculated and is not part of the realized sum. See [0009](../decisions/0009-financial-impact-ledger.md).
+
+XP is `xp_events`. Totals are a sum. See [0010](../decisions/0010-xp-event-ledger.md).
+
+Opportunity status is a small normalized enum. The user-facing stage is a string checked against a PHP catalog that can change without a migration. See [0011](../decisions/0011-status-and-stage.md).
+
+`User::metricsForPeriod()` returns realized totals by type for the dates given, plus current expected and potential for open opportunities, XP in the period, and completion counts. Expected and potential are a current snapshot, not a reconstruction of what the pipeline looked like in October.
+
+Deleting a user removes their rows. Deleting an opportunity removes its actions, and keeps financial impacts and XP events on the user. Impacts keep the type and a title snapshot.
+
+The opt-in `FounderFixtureSeeder` loads the founder scenario. `DatabaseSeeder` does not call it.
 
 ## What the API should become
 
@@ -35,7 +64,7 @@ These are scaffold facts, not product decisions.
 
 **Open.** API contract style. Possibilities include hand-written JSON, Laravel API resources, or an OpenAPI-first workflow. Do not pick one until the first real resource exists.
 
-**Open.** Authentication. It is required before this is a product a person returns to. The mechanism (session, token, first-party cookies for the web client, social login) is not chosen. Web-first does not by itself mean cookie sessions.
+**Decision.** The web client uses Sanctum session cookies. Bearer tokens for native apps are not built. See [0013](../decisions/0013-sanctum-session-auth.md).
 
 **Open.** How the client stores server state. Do not add React Query, Zustand, Redux, or similar until a screen needs it.
 
@@ -45,10 +74,7 @@ These are scaffold facts, not product decisions.
 
 ## Decisions still to make
 
-Do not select these during scaffold work:
-
-- authentication strategy
-- API contract approach
+- API contract approach beyond the current Laravel resources
 - client state and server-cache libraries
 - production database
 - background job infrastructure beyond Laravel's queue
@@ -64,6 +90,6 @@ When one of these is chosen, add a record under [decisions](../decisions/README.
 
 **Decision.** Product UI lives in `/app`. `/api` does not render the product.
 
-**Assumption.** The web client will call the API over HTTP. CORS and the deployed origins are not configured yet, because there is no product client calling the API yet.
+**Decision.** Locally the API is `http://localhost:8000` and Expo web is `http://localhost:8081`. CORS allows that web origin with credentials. See [api.md](api.md).
 
-**Open.** Whether the Expo web app and the API are on the same site, and how local ports are fixed. The scaffold defaults are API `http://localhost:8000` and Expo's own web port.
+**Open.** The production hostnames for the API and the web app.

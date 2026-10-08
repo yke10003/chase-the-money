@@ -1,5 +1,6 @@
 <?php
 
+use App\Exceptions\GoalPeriodOverlapException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -13,10 +14,21 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        //
+        $middleware->statefulApi();
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*') || $request->expectsJson(),
         );
+
+        $exceptions->render(function (GoalPeriodOverlapException $exception, Request $request) {
+            if ($request->is('api/*') || $request->expectsJson()) {
+                return response()->json([
+                    'message' => $exception->getMessage(),
+                    'errors' => [
+                        'starts_on' => [$exception->getMessage()],
+                    ],
+                ], 422);
+            }
+        });
     })->create();

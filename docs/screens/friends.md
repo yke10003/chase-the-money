@@ -1,6 +1,6 @@
 # Friends
 
-**Not implemented.** Product intent only.
+**Not implemented.** Product intent only. The navigation item is marked "Soon". The page explains, without sample data, what Friends will be: a small crew, shared challenges, and privacy by default. There is no leaderboard and no list of people.
 
 **Open.** Whether this ships in the first usable version or immediately after the core loop. Do not build it until that scope decision is made. See [roadmap/v1.md](../roadmap/v1.md) and [social](../product/social.md).
 

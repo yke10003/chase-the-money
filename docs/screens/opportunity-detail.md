@@ -1,59 +1,37 @@
-# Opportunity detail
+# Mission detail
 
-**Not implemented.** Product intent only.
+**Decision.** The screen answers what is happening and what the user should do or report next. It does not show "Step X of Y". It follows `playbook_view` from the API and does not decide which outcome is legal.
 
-**Decision.** The page answers:
+## Header
 
-> What needs to happen next to turn this into money?
+Type glyph, playbook kind and state ("Sell · Listed"), and the mission name.
 
-**Decision.** It is not generic project-management software. It connects an action to progress and a financial outcome.
+## Main column
 
-## Sections
+One "now" panel, chosen by state:
 
-**Likely V1.**
+- **Do this now.** The next action is available effort. Title, description, time, and the XP it earns. A form when the action asks for answers (value, listing, proposal, invoice, payment), otherwise one button with a specific label ("It's listed", "The work is done", "Bank it").
+- **Your move.** A follow-up is due. The user follows up in the world, then reports what happened below.
+- **Waiting.** The next action is dated in the future: a calendar block with the date, how long to go, and "Nothing is required before…". The mission returns to Home on that day.
+- **Your call.** There is no action and the server's headline is a question ("What did you decide?"). The outcomes become the panel.
+- **Where it stands.** There is no action, for example a listed item. The server headline ("Listed on Vinted") and what to report next.
 
-- title, type, and status
-- potential versus realized value
-- a highly prominent next action
-- lifecycle / progress
-- action list
-- money details
-- activity / history
-- notes and links
+Below it: **What happened?** (or "Heard back already?" while waiting). Outcomes are a list. Choosing one expands its fields. An outcome with no fields asks for one more tap ("Confirm: They declined") and says that it closes the mission. Closing outcomes sit apart, in red. Recording money asks the browser to confirm the amount and uses the green "Bank it" button.
 
-Expected amount belongs in money details when the opportunity has a concrete path. See [money model](../product/money-model.md).
+Paused missions show a short panel with Resume.
 
-## Lifecycle display
+A finished mission shows the outcome and date. With money: the banked figure in large green, plus monthly/annualized saving for Save, labelled as not counted. Without money: an outcome-specific line ("Reviewed and kept. Decision made.", "They passed. Not every proposal lands."), and the XP from the work that was done.
 
-Show the domain-specific stages for the opportunity type, not the generic Explore / Active / Waiting list. Those generic states are for filters on the [Opportunities](opportunities.md) screen.
+History (completed steps, money, XP) is a collapsed list under the main column.
 
-Example for Sell:
+## Side column
 
-Valuing → Ready to list → Listed → Offer → Sold → Paid
+- **Money.** The server's money lines, each with a certainty mark: Received and Saved this period are banked; Agreed and Still expected are expected; Proposed, Worth, Asking, and Offer are possible. Worth shows the stored range. On a closed mission a leftover expected amount reads "Was expected".
+- **The story so far.** A display-only track of the playbook's stages (Sell: Value, Prepare, List, Offer, Sold, Paid). A natural negative ending marks where it stopped.
+- **Manage.** Name and notes, "Fix a date or amount" (the playbook's editable fields until money exists), "Add a step" on custom missions, Pause, Mark finished (custom only), Delete.
 
-**Assumption.** Those stage names are a sketch. They are not a final state machine. See [opportunity model](../product/opportunity-model.md).
+The API still records settlement as none, partial, or full. The client does not ask the user to pick those words.
 
-## Waiting
+## Feedback
 
-**Decision.** If the opportunity is waiting, the page says that nothing is currently required. Do not nag the user into inventing busywork.
-
-## Completing a financial outcome
-
-**Decision.** A meaningful completion should feel rewarding. Example, not a specification of the animation or the XP award:
-
-```text
-+€410 realized
-
-October total
-€1,060 / €2,000
-
-+25 XP
-
-Achievement unlocked
-```
-
-The euro amounts follow the money model: only the realized portion moves the goal. +25 XP is an illustration from the exploratory scale, not the decided award.
-
-## Actions
-
-The action list is where execution is recorded. Finishing an action can award XP even when money has not landed. See [gamification](../product/gamification.md).
+After a step or outcome, a short toast says what happened, how much was banked, and the XP. Crossing 25/50/75/100% of the current goal adds a line. No confetti.

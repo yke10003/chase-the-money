@@ -1,6 +1,6 @@
 # Documentation
 
-This directory is the source of truth for product intent. `/api` and `/app` are scaffolds. Nothing described under `product/`, `screens/`, or `roadmap/` is implemented yet.
+This directory is the source of truth for product intent. `/api` is the JSON API under `/api/v1`. `/app` is the Expo web client. The guided flows are playbooks, a profile, and a deterministic first plan. The HTTP contract is in [technical/api.md](technical/api.md).
 
 ## Status labels
 
@@ -28,6 +28,10 @@ Example amounts, XP awards, achievement names, and stage lists are illustrations
 - [Gamification](product/gamification.md)
 - [Social](product/social.md)
 - [Founder fixture](product/founder-fixture.md)
+- [Playbooks](product/playbooks.md)
+- [Flow audit](product/flow-audit.md)
+- [Personalization](product/personalization.md)
+- [Cockpits](product/cockpits.md)
 
 `money-model.md` and `founder-fixture.md` sit beside the original outline because money accounting and the founder scenario are easy to blur into the opportunity entity or a single screen.
 
@@ -47,6 +51,8 @@ These describe intended behavior, not the current UI.
 ### Technical
 
 - [Architecture](technical/architecture.md)
+- [API](technical/api.md)
+- [Client](technical/client.md)
 - [Platform strategy](technical/platform-strategy.md)
 - [Decision records](decisions/README.md)
 - [V1 roadmap](roadmap/v1.md)
