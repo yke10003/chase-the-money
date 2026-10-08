@@ -93,7 +93,7 @@ function Wordmark({ compact = false, light = true }: { compact?: boolean; light?
       <View style={styles.mark}>
         <View style={styles.markFill} />
       </View>
-      {compact ? null : <Text style={[styles.wordmarkText, { color: light ? color.ink : color.onInk }]}>sidehustle</Text>}
+      {compact ? null : <Text style={[styles.wordmarkText, { color: light ? color.ink : color.onInk }]}>Nolume</Text>}
     </View>
   );
 }

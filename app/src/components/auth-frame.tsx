@@ -26,7 +26,7 @@ export function AuthFrame({ title, lead, children }: { title: string; lead: stri
             <View style={styles.mark}>
               <View style={styles.markFill} />
             </View>
-            <Text style={styles.wordmarkText}>sidehustle</Text>
+            <Text style={styles.wordmarkText}>Nolume</Text>
           </View>
           <View style={{ gap: space.xl, maxWidth: 460 }}>
             <Text style={styles.manifesto}>Pick a move. Make progress.</Text>
@@ -57,7 +57,7 @@ export function AuthFrame({ title, lead, children }: { title: string; lead: stri
               <View style={styles.mark}>
                 <View style={styles.markFill} />
               </View>
-              <Text style={[styles.wordmarkText, { color: color.ink }]}>sidehustle</Text>
+              <Text style={[styles.wordmarkText, { color: color.ink }]}>Nolume</Text>
             </View>
           )}
           <View style={{ gap: space.xs }}>

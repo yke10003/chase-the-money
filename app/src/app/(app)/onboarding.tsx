@@ -207,7 +207,7 @@ export default function OnboardingScreen() {
           <View style={styles.mark}>
             <View style={styles.markFill} />
           </View>
-          <Text style={styles.wordmarkText}>sidehustle</Text>
+          <Text style={styles.wordmarkText}>Nolume</Text>
         </View>
         <View style={styles.progress}>
           {STEPS.map((label, index) => (
