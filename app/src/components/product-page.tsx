@@ -24,6 +24,7 @@ import { useLayout } from '@/design/layout';
 import { font, space, weight } from '@/design/tokens';
 import { errorMessage } from '@/lib/errors';
 import { formatAmount, formatAmountRange, majorToMinor, minorToMajorInput } from '@/lib/money';
+import { navRequest } from '@/lib/nav-log';
 import { coverIndex, listingPlace, listingStatus, productFacts } from '@/lib/product-detail';
 import { categoryIcon, rememberSellItem, startSellWrite } from '@/lib/sell-cache';
 import { listingSuggestion } from '@/lib/sell';
@@ -70,6 +71,8 @@ export function ProductPage() {
   }, [id]);
 
   function close() {
+    navRequest('product.close.request', { id, canGoBack: router.canGoBack() });
+
     if (router.canGoBack()) {
       router.back();
       return;
@@ -122,6 +125,7 @@ export function ProductPage() {
   const icon = categoryIcon(catalog.data?.data.categories, record.category);
 
   function resume() {
+    navRequest('product.resume.request', { id: record.id });
     queueSellResume(record.id);
     router.dismissTo('/sell');
   }

@@ -712,7 +712,7 @@ Screens that only navigate inside their own stack (a step, a child editor push, 
 
 ## 10. Native lifecycle signals and experiments
 
-None of these experiments has run. **Do not treat `onFinishTransitioning` or any other signal as proven until E2 records an observed pass.**
+E9, E2 and E6 have run (see [10.1](#101-observed-results)). The others are pending. **Do not treat `onFinishTransitioning` or any other signal as proven until E2 records an observed pass.**
 
 Candidate settle signals:
 
@@ -726,14 +726,138 @@ Experiments run on a throwaway branch and are never merged. Run them on the iPho
 | Id | Question | Prediction | Pass criteria | Observed |
 | --- | --- | --- | --- | --- |
 | E1 | Can Sell creation be an `(app)` `fullScreenModal` route over the cockpit? | Yes, as Product Detail is | Cockpit stays presented underneath. Tab bar is restored under the modal and lifted again after dismissal. Keyboard does not reveal Sell. Picker open and close does not dismiss creation or the cockpit. Category to Identity does not flash. | Not run |
-| E2 | Which signal fires exactly once after a dismissal has finished? | `onFinishTransitioning` on `(app)` | Fires once, after the animation, for `back()`, `dismissTo` and swipe where allowed. Never early. Also fires for an interrupted or cancelled swipe. | Not run |
+| E2 | Which signal fires exactly once after a dismissal has finished? | `onFinishTransitioning` on `(app)` | Fires once, after the animation, for `back()`, `dismissTo` and swipe where allowed. Never early. Also fires for an interrupted or cancelled swipe. | Run 2026-10-13. **Pass, with conditions.** After the animation for `back()` (5 of 5). Early, with no dismissal, when another stack presents at the same time. Swipe not applicable (E6). Interrupted not reproducible by hand. See [10.1](#101-observed-results). |
 | E3 | Does `replace` from one modal to another in the `(app)` stack present the new modal? | No (blank or flash) | New modal visible and the old one gone, with no flash | Not run |
 | E4 | Does re-tapping the focused native tab emit `tabPress`? | Unknown | Event observed in JavaScript | Not run |
 | E5 | Can the cockpit be returned to the resting detent from JavaScript (for example, setting `sheetAllowedDetents` to `[0.61]` and back)? | Possibly | Sheet animates to 0.61, drag still works, lift intact. If not, a native method is needed and requires approval. | Not run |
-| E6 | Does `gestureEnabled` do anything on a `fullScreenModal`? | No | Documented either way | Not run |
+| E6 | Does `gestureEnabled` do anything on a `fullScreenModal`? | No | Documented either way | Run 2026-10-13. **Pass.** No. A swipe scrolls the content. |
 | E7 | Do tabs share the cockpit scroll offset? Does `scrollTo` restoration keep drag-to-expand? | Shared; restoration works | Both answered | Not run |
 | E8 | Does closing an RN `Modal` while pushing a route overlap or flash? | Sometimes | Documented. T9 sequence passes. | Not run |
-| E9 | What actually happens in today's Continue Setup? | One of the two problem 1 failure modes | Logged sequence identifies the mode | Not run |
+| E9 | What actually happens in today's Continue Setup? | One of the two problem 1 failure modes | Logged sequence identifies the mode | Run 2026-10-13. **Pass.** Both modes occur, decided by a race between the two native stacks: the cover is lost (1 of 3 runs), or the cover is presented over Product Detail and Product Detail is left presented, orphaned and unresponsive (2 of 3). See [10.1](#101-observed-results). |
+
+### 10.1 Observed results
+
+Diagnostics: `app/src/lib/nav-log.ts` (dev only). `route.*` lines come from Expo Router state, `native.*` lines from react-native-screens callbacks. JavaScript timestamps for native events are delivery times, not UIKit times, but their order is reliable.
+
+#### E9 — Continue Setup today
+
+- **Date:** 2026-10-13. iPhone 16 Pro, Debug build from Oct 12 (no native changes since), Metro bundle at the Stage 1 diagnostics commit.
+- **Scenario:** Sell, open unfinished product 17 ("Take the front"), wait, tap Continue setup once, wait 3 s. Repeated after a relaunch. A control run opened and closed Product Detail with Close.
+- **Status:** **Pass** (the logged sequence identifies the failure). The root cause is a race between two native stacks, not one deterministic mode.
+
+**Control: Product Detail Close.** Route state is final within 40 ms. The native dismissal finishes about 515 ms after the request. Product Detail's own `willDisappear` and `didDisappear` never reach JavaScript, because the screen unmounts before UIKit runs them.
+
+```text
+[nav +29412ms] product.close.request id=17 canGoBack=true … inflight=none
+[nav +29416ms] route.action type=GO_BACK
+[nav +29454ms] route.state app=(tabs) tab=sell
+[nav +29514ms] native.cockpit.willAppear
+[nav +30029ms] native.cockpit.didAppear
+[nav +30030ms] native.app.finishTransitioning
+```
+
+**Run 1 (Product Detail open 5 s): the cover is lost.** The cover is committed 540 ms before Product Detail's dismissal finishes. The cover screen never reports `willAppear`. The app showed the Sell board.
+
+```text
+[nav +52566ms] product.resume.request id=17 …
+[nav +52575ms] route.action type=POP_TO to=(tabs)/sell/index
+[nav +52683ms] resume.take id=17 push=/sell/setup/17
+[nav +52688ms] route.action type=PUSH to=setup/[id] id=17
+[nav +52745ms] cover.commit show=true path=/sell/setup/17
+[nav +52776ms] native.cockpit.willAppear          ← Product Detail starts dismissing
+[nav +53285ms] native.cockpit.didAppear           ← Product Detail gone
+[nav +53286ms] native.app.finishTransitioning
+                                                  ← no native.sell-create.* ever
+```
+
+Tapping Sell something seven times afterwards pushed `new` seven times into the Sell stack (`sell=index>setup/[id]:17>new>new>…`). It produced no native event and nothing visible. React keeps the cover mounted (`show=true`), so `MenuSheet` gets no new child change and never retries. Only a relaunch recovered. This matches the `previous.beingDismissed` early return in `setModalViewControllers`. Whether `_updatingModals` also stays set is not visible in these logs. `native.menusheet.finishTransitioning` was added after this run to show it.
+
+**Run 2 (after relaunch, Product Detail open 1.6 s): the cover appears without the cockpit reappearing.**
+
+```text
+[nav +13149ms] product.resume.request id=17 …
+[nav +13163ms] route.action type=POP_TO to=(tabs)/sell/index
+[nav +13280ms] route.action type=PUSH to=setup/[id] id=17
+[nav +13338ms] cover.commit show=true path=/sell/setup/17
+[nav +13362ms] native.app.finishTransitioning     ← 24 ms later, no dismissal animation
+[nav +13385ms] native.sell-create.willAppear
+[nav +13893ms] native.sell-create.didAppear
+                                                  ← no native.cockpit.willAppear/didAppear
+[nav +25593ms] route.action type=POP_TO to=index  ← creation closed
+[nav +25646ms] cover.commit show=false path=/sell
+                                                  ← still no native.cockpit.didAppear
+```
+
+Creation opened at the saved step. The cockpit stayed "disappeared" from Product Detail's presentation through creation and after creation closed.
+
+**Run 3 (E2 step F, Product Detail open 0.8 s): same as run 2, and the orphan is confirmed.** After X in creation, Product Detail was visible again. Its Close button did nothing. Route state already said `app=(tabs)` and Product Detail's React screen had been removed at +31543 ms.
+
+```text
+[nav +31475ms] product.resume.request id=17 … sinceFinish=844ms
+[nav +31543ms] route.removed path=/product/17 …
+[nav +31653ms] cover.commit show=true path=/sell/setup/17
+[nav +31674ms] native.app.finishTransitioning     ← 21 ms later, no cockpit.willAppear
+[nav +31695ms] native.sell-create.willAppear
+[nav +32202ms] native.sell-create.didAppear
+[nav +32203ms] native.menusheet.finishTransitioning
+[nav +34683ms] route.action type=POP_TO to=index  ← X in creation
+[nav +34746ms] cover.commit show=false path=/sell
+[nav +35269ms] native.menusheet.finishTransitioning
+                                                  ← no native.cockpit.*; Product Detail visible, dead
+```
+
+**Mechanism, from the logs plus `RNSScreenStack.mm`:**
+
+1. `MenuSheet` presents the cover from the topmost controller, which is Product Detail.
+2. The `(app)` stack then finds a controller it does not own on top. It drops Product Detail from `_presentedModals` and runs `afterTransitions` without dismissing it. That is the topmost-controller branch of `setModalViewControllers`.
+3. That explains the early `finishTransitioning` and the cockpit never reappearing. Product Detail stays presented natively with no React tree behind it.
+
+**Race window.** In every run, the `(app)` stack acts about 190–200 ms after the `POP_TO`, and the cover commit lands about 170 ms after it. Whichever stack UIKit serves first decides the outcome. Run 1 lost the cover (Product Detail was already being dismissed). Runs 2 and 3 orphaned Product Detail (the cover was presented first). How long Product Detail had been open (5 s, 1.6 s, 0.8 s) may correlate, but three runs cannot show it.
+
+**Cover rendering (separate, confirmed on device).** The `MenuSheet` creation cover shows creation only in the top third, with the hero and an empty cockpit sheet visible below. This also happens on a plain Sell something open with no Product Detail involved, so it is not caused by the handoff. An earlier session reported similar clipping. The Stage 1 diagnostics add only JavaScript event handlers, and react-native-screens makes the same native calls with or without them. So the clipping is very likely pre-existing, but no build without the diagnostics has been checked.
+
+**Architectural implication.** Gating on route state (`pathname === '/sell'`) runs about 170 ms after the request, but native dismissal needs about 510 ms. Two stacks then race in UIKit, and either outcome is broken. Any handoff across presentations must wait for a native completion signal, and should not cross native stacks at all. This supports I10 and moving creation to the `(app)` stack, subject to E1.
+
+#### E2 — native completion signal
+
+- **Date:** 2026-10-13, same device and build as E9.
+- **Scenarios:**
+  - Product Detail opened and closed with Close: 5 times across the E9 control and E2 steps A and C.
+  - Swipe-down attempt on Product Detail (step B).
+  - Fast Close attempt (step C).
+  - Sell something cover open (step D).
+  - Profile push (step E).
+  - Continue Setup (step F).
+- **Status:** **Pass, with conditions.** `(app)` `onFinishTransitioning` is reliable for a dismissal that only the `(app)` stack performs. It is not proof that a controller is gone when another stack presents at the same time.
+
+| Question | Observed |
+| --- | --- |
+| Fires at all? | Yes. |
+| After native dismissal completes? | Yes for `back()`: 5 of 5 fired about 505–520 ms after `GO_BACK`, in the same millisecond as `native.cockpit.didAppear`, which always came first. For `dismissTo` with a competing presentation (E9 runs 2 and 3), it fired after 21–24 ms with no dismissal. That is a false positive. |
+| Once or multiple times? | Once per present and once per dismiss. Twice at stack mount (`(tabs)` willAppear and didAppear). |
+| Programmatic and gesture? | A swipe cannot dismiss a `fullScreenModal`. It scrolls the content (see E6). No gesture dismissal exists to test at this level. |
+| Unrelated transitions? | Yes. It also fires for presents, card pushes (`settings`) and stack mounts. It does not identify a transition. |
+| Can it be tied to one request? | Only by sequence. Take the first `onFinishTransitioning` after the dismissal's route commit, while nothing else can start on the `(app)` stack. A present that is still animating finishes first: react-native-screens queues the dismissal behind it and then emits again. So "pending" must cover opening as well as closing (T12). |
+| Interrupted, or not delivered? | Not reproducible by hand: Product Detail is fully presented before Close can be hit (262 ms after `didAppear` was the fastest). From source: on the `previous.beingDismissed` early return, the stack does not call `afterTransitions` and never emits. A waiter can therefore hang. That is the T12 fallback case (next `pageFocused`, with a dev warning, no timer). |
+| A more precise callback? | `native.cockpit.didAppear` (cockpit `Screen` `onAppear`). It ended every normal dismissal, and it correctly did **not** fire when Product Detail was orphaned. It needs a callback on the cockpit `Screen`, which requires approval. Per-route `transitionEnd` is never delivered for the popped route. `native.menusheet.finishTransitioning` fires for `MenuSheet` modal changes and 3–4 times at mount. |
+
+**Recommendation (smallest reliable mechanism).** Coordinate handoffs on the `(app)` stack's `onFinishTransitioning`:
+
+- A single pending flag covers the whole intent, open or close. It is set when the router call is made and cleared by the first `onFinishTransitioning` after that call's route commit.
+- No other `(app)` transition may start while it is set.
+- In dev, assert that `native.cockpit.didAppear` arrived before that `onFinishTransitioning` for any close of a top-level experience on iOS. Otherwise warn. This catches orphaning without a timer.
+- The signal is only trustworthy while the `(app)` stack is the only owner of top-level presentations. That is what the target architecture establishes.
+
+#### E6 — `gestureEnabled` on a `fullScreenModal`
+
+- **Date:** 2026-10-13. Swipe down on Product Detail (`gestureEnabled: true`).
+- **Observed:** the swipe scrolls the content (overscroll), and Product Detail does not move or dismiss. No `gestureCancel` or other native event.
+- **Status:** **Pass** (documented). The prediction "No" holds. Close buttons are the only way to dismiss a top-level `fullScreenModal`.
+
+#### Other observations from these runs
+
+- **Profile remounts the shell twice (problem 3, I1).** Opening Profile logs `cockpit.unmount`, `cockpit.mount count=2` and `app.wrapper wrapper=AppShell`. The whole `(app)` stack remounts, including the `settings` screen itself (`route.removed` then `route.focus`). Going back logs `cockpit.mount count=3`. The Profile page showed an empty full screen with only an old "Back" label. Not investigated in Stage 1.
+- **Duplicate Sell routes.** After the cover was lost in E9 run 1, every Sell something tap pushed another `new` (`sell=index>setup/[id]:17>new>new>…`). This is I9 behaviour in the current code.
 
 ## 11. Roadmap
 

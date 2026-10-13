@@ -8,6 +8,9 @@ import { homePaint, ScoreHeroView } from '@/components/score-hero';
 import { leaveSell, takeSellResume } from '@/components/sell-flow';
 import { useTheme } from '@/state/theme';
 import { abandonedSellStackKey, cockpitArea, creationHandoffReady, decideCreationCover, holdsCockpitScene, isCockpitRoot, isSellCreationPath, readSellStack, type CockpitArea, type SellStackSnap } from '@/lib/cockpit-scene';
+import { navLog } from '@/lib/nav-log';
+
+let cockpitMounts = 0;
 
 function sameScore(current: PublishedScore | null, next: PublishedScore): boolean {
   if (!current || current.path !== next.path) {
@@ -103,6 +106,26 @@ export function CockpitShell({ children }: { children: ReactNode }) {
   const showCoverRef = useRef(showCover);
   showCoverRef.current = showCover;
   const [, setCoverEpoch] = useState(0);
+  const decisionLine = `${pathname}|${decision.present}|${decision.pop}|${handoffReady}|${showCover}`;
+
+  useEffect(() => {
+    cockpitMounts += 1;
+    navLog('cockpit.mount', { count: cockpitMounts });
+
+    return () => navLog('cockpit.unmount');
+  }, []);
+
+  useEffect(() => {
+    navLog('cockpit.detent', { index: detent });
+  }, [detent]);
+
+  useEffect(() => {
+    navLog('cover.decision', { path: pathname, present: decision.present, pop: decision.pop, handoffReady, show: showCover });
+  }, [decisionLine]);
+
+  useEffect(() => {
+    navLog('cover.commit', { show: showCover, path: pathname });
+  }, [showCover]);
 
   useLayoutEffect(() => {
     const live = creationPublishedNow();
@@ -122,6 +145,7 @@ export function CockpitShell({ children }: { children: ReactNode }) {
       const resumeId = takeSellResume();
 
       if (resumeId != null) {
+        navLog('resume.take', { id: resumeId, push: `/sell/setup/${resumeId}` });
         router.push(`/sell/setup/${resumeId}`);
       }
     }
@@ -130,6 +154,7 @@ export function CockpitShell({ children }: { children: ReactNode }) {
       return;
     }
 
+    navLog('cockpit.popToTop', { reason: 'blocked', path: pathname });
     navigationRef.current?.dispatch({
       type: 'POP_TO_TOP',
       target: decision.stackKey,
@@ -153,6 +178,7 @@ export function CockpitShell({ children }: { children: ReactNode }) {
     }
 
     poppedStack.current = stackKey;
+    navLog('cockpit.popToTop', { reason: 'abandoned', path: pathname });
     navigationRef.current?.dispatch({
       type: 'POP_TO_TOP',
       target: stackKey,
@@ -160,6 +186,8 @@ export function CockpitShell({ children }: { children: ReactNode }) {
   }, [navigationRef, pathname, rootState]);
 
   function dismissCreation() {
+    navLog('native.sell-create.dismissed', { show: showCoverRef.current, path: pathRef.current });
+
     if (!showCoverRef.current || !isSellCreationPath(pathRef.current)) {
       return;
     }

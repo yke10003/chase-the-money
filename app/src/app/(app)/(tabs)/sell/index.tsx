@@ -19,6 +19,7 @@ import { useTheme } from '@/state/theme';
 import { askingMinor, areaOf } from '@/lib/areas';
 import { errorMessage } from '@/lib/errors';
 import { formatAmount, formatAmountRange } from '@/lib/money';
+import { navRequest } from '@/lib/nav-log';
 import { missionGroup } from '@/lib/mission';
 
 export default function SellScreen() {
@@ -194,7 +195,10 @@ function SellBoard({ empty }: { empty: ReactNode }) {
           key={item.id}
           item={item}
           icon={categoryIcon(catalog.data?.data.categories, item.category)}
-          onPress={() => router.push(`/product/${item.id}`)}
+          onPress={() => {
+            navRequest('product.open.request', { id: item.id, from: 'sell', setupDone: item.setup_done });
+            router.push(`/product/${item.id}`);
+          }}
         />
       ))}
     </ProductGrid>

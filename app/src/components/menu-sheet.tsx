@@ -3,6 +3,11 @@ import { StyleSheet } from 'react-native';
 import { Screen, ScreenStack } from 'react-native-screens';
 
 import { SHEET_RESTING_DETENT } from '@/lib/cockpit-scene';
+import { navLog, screenLifecycleLog } from '@/lib/nav-log';
+
+const cockpitLog = __DEV__ ? screenLifecycleLog('cockpit') : {};
+const coverLog = __DEV__ ? screenLifecycleLog('sell-create') : {};
+const stackFinished = __DEV__ ? () => navLog('native.menusheet.finishTransitioning') : undefined;
 
 /**
  * One form sheet for the whole cockpit. Detent 1 is UIKit's maximum, already
@@ -32,7 +37,7 @@ export function MenuSheet({
   onCoverDismiss?: () => void;
 }) {
   return (
-    <ScreenStack style={StyleSheet.absoluteFill} pointerEvents="box-none">
+    <ScreenStack style={StyleSheet.absoluteFill} pointerEvents="box-none" onFinishTransitioning={stackFinished}>
       <Screen activityState={2} pointerEvents="none" style={{ flex: 1, backgroundColor: 'transparent' }} />
       <Screen
         activityState={2}
@@ -44,6 +49,7 @@ export function MenuSheet({
         sheetLargestUndimmedDetentIndex="last"
         sheetExpandsWhenScrolledToEdge
         gestureEnabled={false}
+        {...cockpitLog}
         onSheetDetentChanged={(event) => {
           if (!event.nativeEvent.isStable) {
             return;
@@ -61,6 +67,7 @@ export function MenuSheet({
           stackPresentation="fullScreenModal"
           screenId="sell-create"
           gestureEnabled
+          {...coverLog}
           onDismissed={onCoverDismiss}
           style={{ flex: 1, backgroundColor: paper }}
         >

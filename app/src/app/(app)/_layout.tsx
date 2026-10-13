@@ -10,6 +10,7 @@ import { ErrorState } from '@/components/ui';
 import { useLayout } from '@/design/layout';
 import { space } from '@/design/tokens';
 import { errorMessage } from '@/lib/errors';
+import { appFinishTransitioning, appScreenListeners, navLog, useRouteStateLog } from '@/lib/nav-log';
 import { useAuth } from '@/state/auth';
 import { useBoot } from '@/state/boot';
 import { useTheme } from '@/state/theme';
@@ -31,6 +32,14 @@ export default function AppLayout() {
   const allowedWithoutGoal = onboarding || pathname === '/settings';
   const redirecting = goal.isSuccess && goal.data === null && !allowedWithoutGoal;
   const settled = goal.isSuccess || goal.isError;
+  const wrapper = onboarding ? 'FocusShell' : nativeTabs ? 'NativeTabWash' : 'AppShell';
+
+  useRouteStateLog();
+
+  // A different wrapper element remounts the whole (app) stack, cockpit included.
+  useEffect(() => {
+    navLog('app.wrapper', { wrapper, path: pathname });
+  }, [wrapper]);
 
   useEffect(() => {
     if (redirecting) {
@@ -64,8 +73,12 @@ export default function AppLayout() {
     <Stack
       // The shader lives behind this navigator. An opaque stack container
       // covers it on every main page.
-      unstable_nativeProps={{ nativeContainerStyle: { backgroundColor: 'transparent' } }}
+      unstable_nativeProps={{
+        nativeContainerStyle: { backgroundColor: 'transparent' },
+        onFinishTransitioning: __DEV__ ? appFinishTransitioning : undefined,
+      }}
       screenOptions={{ headerShown: false, animation: 'none', contentStyle: { backgroundColor: 'transparent' } }}
+      screenListeners={__DEV__ ? appScreenListeners : undefined}
     >
       <Stack.Screen name="(tabs)" options={{ contentStyle: { backgroundColor: 'transparent' } }} />
       <Stack.Screen

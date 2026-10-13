@@ -12,6 +12,7 @@ import { BloomSplash, useLaunchScheme } from '@/components/bloom-splash';
 import { FeedbackProvider } from '@/components/feedback';
 import { isCockpitRoot } from '@/components/shell';
 import { useLayout } from '@/design/layout';
+import { startNavLog } from '@/lib/nav-log';
 import { AuthProvider, useAuth } from '@/state/auth';
 import { BootProvider, useBoot } from '@/state/boot';
 import { createQueryClient } from '@/state/query';
@@ -19,6 +20,7 @@ import { ThemeProvider, useTheme } from '@/state/theme';
 
 SplashScreen.setOptions({ duration: 200, fade: true });
 SplashScreen.preventAutoHideAsync().catch(() => {});
+startNavLog();
 
 export default function RootLayout() {
   const [client] = useState(createQueryClient);
