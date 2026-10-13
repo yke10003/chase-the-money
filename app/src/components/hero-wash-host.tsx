@@ -90,16 +90,17 @@ export function HeroWashProvider({ children }: { children: ReactNode }) {
   );
 }
 
-/** One wash for every section. Place it inside the scrolling content the hero is measured against. */
-export function HeroWashSlot({ fill = false }: { fill?: boolean }) {
+/**
+ * One wash for every section. Place it inside the scrolling content the hero is measured against.
+ * `always` keeps it painted behind the iOS tabs, which stay mounted under every modal page.
+ */
+export function HeroWashSlot({ fill = false, always = false }: { fill?: boolean; always?: boolean }) {
   const { paint, box } = useContext(ShownContext);
   const phone = useLayout().phone;
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
-  // Product detail is a modal over Sell. Keep the shader painted so the
-  // overview is not a blank page while that modal opens or closes.
-  const visible = cockpitArea(pathname) != null || pathname.startsWith('/product/');
+  const visible = always || cockpitArea(pathname) != null || pathname.startsWith('/product/');
   const frame = box ?? (phone ? { x: 0, y: 0, width, height: fill ? height : 400 + insets.top } : null);
 
   if (!paint || !frame) {
@@ -144,7 +145,7 @@ function TabWashFrame({ children }: { children: ReactNode }) {
 
   return (
     <View ref={host?.contentRef} style={{ flex: 1 }} collapsable={false}>
-      <HeroWashSlot fill />
+      <HeroWashSlot fill always />
       <View style={{ flex: 1 }}>{children}</View>
     </View>
   );

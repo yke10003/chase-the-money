@@ -141,7 +141,7 @@ function Banked({ view, period }: { view: ProgressView; period: Period }) {
           <T variant="body" color={color.ink2}>
             Nothing received {period === 'all' ? 'yet' : `in ${PERIOD_PHRASE[period]}`}.
           </T>
-          <Button label="Find a quick win" tone="secondary" icon="storefront" onPress={() => router.push('/sell')} />
+          <Button label="Find a quick win" tone="secondary" icon="storefront" onPress={() => router.dismissTo('/sell')} />
         </View>
       )}
     </View>

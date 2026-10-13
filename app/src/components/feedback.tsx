@@ -92,7 +92,7 @@ function MomentCard({ moment, onDone }: { moment: Moment; onDone: () => void }) 
             accessibilityRole="button"
             onPress={() => {
               onDone();
-              router.push(moment.again?.href ?? '/');
+              router.dismissTo(moment.again?.href ?? '/');
             }}
             style={styles.again}
           >

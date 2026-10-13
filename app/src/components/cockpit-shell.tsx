@@ -7,7 +7,7 @@ import { MenuSheet } from '@/components/menu-sheet';
 import { homePaint, ScoreHeroView } from '@/components/score-hero';
 import { leaveSell, takeSellResume } from '@/components/sell-flow';
 import { useTheme } from '@/state/theme';
-import { abandonedSellStackKey, cockpitArea, creationHandoffReady, decideCreationCover, holdsCockpitScene, isCockpitRoot, isSellCreationPath, readSellStack, type CockpitArea, type SellStackSnap } from '@/lib/cockpit-scene';
+import { abandonedSellStackKey, cockpitArea, creationHandoffReady, decideCreationCover, holdsCockpitScene, isCockpitRoot, isSellCreationPath, readSellStack, shellPath, type CockpitArea, type SellStackSnap } from '@/lib/cockpit-scene';
 import { navLog } from '@/lib/nav-log';
 
 let cockpitMounts = 0;
@@ -59,9 +59,18 @@ export function CockpitShell({ children }: { children: ReactNode }) {
   const publish = useCallback((next: PublishedScore) => {
     setPublished((current) => (sameScore(current, next) ? current : next));
   }, []);
-  const area = cockpitArea(pathname);
-  const rooted = isCockpitRoot(pathname) && published != null && published.path === pathname;
-  const held = published != null && holdsCockpitScene(pathname, published.path);
+  // Profile, Progress and Product Detail sit above the tabs. The hero keeps
+  // showing the tab underneath them.
+  const [lastTabPath, setLastTabPath] = useState<string | null>(null);
+  const tabPath = shellPath(pathname, lastTabPath);
+
+  if (tabPath !== lastTabPath) {
+    setLastTabPath(tabPath);
+  }
+
+  const area = cockpitArea(tabPath);
+  const rooted = isCockpitRoot(tabPath) && published != null && published.path === tabPath;
+  const held = published != null && holdsCockpitScene(tabPath, published.path);
   const score = rooted || held ? published : area ? backdropFor(area, accent) : null;
   const navigationRef = useNavigationContainerRef();
   const rootState = useRootNavigationState();
@@ -118,6 +127,10 @@ export function CockpitShell({ children }: { children: ReactNode }) {
   useEffect(() => {
     navLog('cockpit.detent', { index: detent });
   }, [detent]);
+
+  useEffect(() => {
+    navLog('cockpit.hero', { area, tabPath });
+  }, [area, tabPath]);
 
   useEffect(() => {
     navLog('cover.decision', { path: pathname, present: decision.present, pop: decision.pop, handoffReady, show: showCover });

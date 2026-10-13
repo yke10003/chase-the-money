@@ -86,13 +86,13 @@ export default function DiscoverScreen() {
   const tool = typeof params.tool === 'string' ? params.tool : 'hunt';
 
   useEffect(() => {
-    router.replace(MOVED[tool] ?? '/sell?start=hunt');
+    router.dismissTo(MOVED[tool] ?? '/sell?start=hunt');
   }, [router, tool]);
 
   return <LoadingState label="Opening the right place…" />;
 }
 
-function useStart() {
+function useStart(onStarted?: (id: number) => void) {
   const refresh = useRefreshProduct();
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -105,7 +105,12 @@ function useStart() {
     try {
       const created = await startPlaybook(playbook, input);
       await refresh();
-      router.push(`/opportunities/${created.data.id}`);
+
+      if (onStarted) {
+        onStarted(created.data.id);
+      } else {
+        router.push(`/opportunities/${created.data.id}`);
+      }
     } catch (caught) {
       setError(caught);
     } finally {
@@ -220,14 +225,17 @@ export function MoneyHunt({ categories }: { categories: string[] }) {
 export function Skills({
   missions,
   bare = false,
+  onStarted,
 }: {
   missions: Array<{ title: string; detail: string; current_state: string; area: string | null }>;
   bare?: boolean;
+  /** Takes over opening the new mission, e.g. after a sheet has closed. */
+  onStarted?: (id: number) => void;
 }) {
   const router = useRouter();
   const catalog = useQuery({ queryKey: ['catalog'], queryFn: getCatalog });
   const profile = useQuery({ queryKey: ['profile'], queryFn: getProfile });
-  const { start, busy, error } = useStart();
+  const { start, busy, error } = useStart(onStarted);
   const [starting, setStarting] = useState<string | null>(null);
   const areaLabels = Object.fromEntries((catalog.data?.data.work_categories ?? []).map((item) => [item.key, item.label]));
   const { styles, typeColor, typeScale } = useDiscoverUi();

@@ -78,7 +78,7 @@ export function ProductPage() {
       return;
     }
 
-    router.replace('/sell');
+    router.dismissTo('/sell');
   }
 
   async function keep(next: SellItemView) {

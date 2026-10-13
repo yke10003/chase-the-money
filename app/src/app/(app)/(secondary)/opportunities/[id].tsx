@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMemo, useState, type ReactNode } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Platform, StyleSheet, Text, View } from 'react-native';
 
 import {
   completeAction,
@@ -172,7 +172,10 @@ function Detail({ opportunity }: { opportunity: OpportunityDetail }) {
 
   return (
     <View style={{ gap: space.lg }}>
-      <LinkButton label="Back" icon="arrowLeft" onPress={() => (router.canGoBack() ? router.back() : router.push(areaHref(areaOf(opportunity))))} />
+      {/* On iOS phone the modal frame draws Back and Close. */}
+      {Platform.OS === 'ios' && layout.phone ? null : (
+        <LinkButton label="Back" icon="arrowLeft" onPress={() => (router.canGoBack() ? router.back() : router.dismissTo(areaHref(areaOf(opportunity))))} />
+      )}
       <Header opportunity={opportunity} view={view} />
       {error ? <InlineError message={errorMessage(error)} /> : null}
 
@@ -526,8 +529,8 @@ function Result({ opportunity, view }: { opportunity: OpportunityDetail; view: P
 
       <Divider />
       <View style={{ flexDirection: 'row', gap: space.sm, flexWrap: 'wrap' }}>
-        <Button label="Back to Home" icon="house" onPress={() => router.push('/')} />
-        <Button label="Back to this area" tone="secondary" icon="arrowLeft" onPress={() => router.push(areaHref(areaOf(opportunity)))} />
+        <Button label="Back to Home" icon="house" onPress={() => router.dismissTo('/')} />
+        <Button label="Back to this area" tone="secondary" icon="arrowLeft" onPress={() => router.dismissTo(areaHref(areaOf(opportunity)))} />
       </View>
     </Panel>
   );
@@ -646,6 +649,7 @@ function Journey({ opportunity }: { opportunity: OpportunityDetail }) {
 function Manage({ opportunity, view, run, busy }: { opportunity: OpportunityDetail; view: PlaybookView | null; run: Run; busy: boolean }) {
   const { color, styles } = useDetailUi();
   const router = useRouter();
+  const refresh = useRefreshProduct();
   const [title, setTitle] = useState('');
   const [effort, setEffort] = useState<'quick' | 'medium' | 'deep'>('quick');
   const [name, setName] = useState(opportunity.title);
@@ -734,7 +738,15 @@ function Manage({ opportunity, view, run, busy }: { opportunity: OpportunityDeta
           onPress={async () => {
             if (await confirmAction('Delete this mission?', 'The mission and its steps are removed. Money you banked and XP you earned stay in your history.')) {
               await deleteOpportunity(opportunity.id);
-              router.replace(areaHref(areaOf(opportunity)));
+
+              if (router.canGoBack()) {
+                router.back();
+              } else {
+                router.dismissTo(areaHref(areaOf(opportunity)));
+              }
+
+              // The tabs underneath stay mounted, so their lists do not refetch on their own.
+              void refresh();
             }
           }}
         />

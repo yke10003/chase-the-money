@@ -5,15 +5,20 @@ import { Platform, View } from 'react-native';
 
 import { getCurrentGoal } from '@/api/endpoints';
 import { NativeTabWash } from '@/components/hero-wash-host';
-import { AppShell, FocusShell, keepsNativeTabs } from '@/components/shell';
+import { AppShell, FocusShell } from '@/components/shell';
 import { ErrorState } from '@/components/ui';
 import { useLayout } from '@/design/layout';
 import { space } from '@/design/tokens';
+import { appWrapper, secondaryPresentation } from '@/lib/app-shell';
 import { errorMessage } from '@/lib/errors';
 import { appFinishTransitioning, appScreenListeners, navLog, useRouteStateLog } from '@/lib/nav-log';
 import { useAuth } from '@/state/auth';
 import { useBoot } from '@/state/boot';
 import { useTheme } from '@/state/theme';
+
+// A cold link to a detail or secondary page still builds the tabs, and the
+// cockpit, underneath it. Close then reveals that shell instead of nothing.
+export const unstable_settings = { anchor: '(tabs)' };
 
 export default function AppLayout() {
   const { user, loading } = useAuth();
@@ -28,11 +33,11 @@ export default function AppLayout() {
   const phone = useLayout().phone;
   const { color } = useTheme();
   const onboarding = pathname === '/onboarding';
-  const nativeTabs = Platform.OS === 'ios' && phone && keepsNativeTabs(pathname);
   const allowedWithoutGoal = onboarding || pathname === '/settings';
   const redirecting = goal.isSuccess && goal.data === null && !allowedWithoutGoal;
   const settled = goal.isSuccess || goal.isError;
-  const wrapper = onboarding ? 'FocusShell' : nativeTabs ? 'NativeTabWash' : 'AppShell';
+  const wrapper = appWrapper({ os: Platform.OS, phone, pathname });
+  const secondary = secondaryPresentation(Platform.OS, phone);
 
   useRouteStateLog();
 
@@ -90,13 +95,21 @@ export default function AppLayout() {
           contentStyle: { backgroundColor: color.paper },
         }}
       />
+      <Stack.Screen
+        name="(secondary)"
+        options={{
+          presentation: secondary.presentation,
+          animation: secondary.animation,
+          contentStyle: { backgroundColor: secondary.presentation === 'fullScreenModal' ? color.paper : 'transparent' },
+        }}
+      />
     </Stack>
   );
-  const shell = onboarding ? (
+  const shell = wrapper === 'FocusShell' ? (
     <FocusShell>
       {stack}
     </FocusShell>
-  ) : nativeTabs ? (
+  ) : wrapper === 'NativeTabWash' ? (
     <NativeTabWash>
       {stack}
     </NativeTabWash>

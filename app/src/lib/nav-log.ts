@@ -115,6 +115,12 @@ export function useRouteStateLog() {
       if (summary.tabsRoutes > 1) {
         navLog('route.warn.duplicate-tabs', { count: summary.tabsRoutes });
       }
+
+      // Each top-level experience is one native modal over the cockpit. Two at
+      // once means a later Close or tab switch has to remove both (navigation.md, E3).
+      if (summary.topLevelRoutes > 1) {
+        navLog('route.warn.stacked-top-level', { app: summary.app });
+      }
     });
   }, [ref]);
 }
@@ -207,14 +213,17 @@ function summarize(root: NavNode | undefined) {
   const tabRoute = tabs?.routes?.[tabs.index ?? 0];
   const tabStack = tabRoute?.state?.routes ?? [];
   const appLine = appRoutes.map((route) => {
-    const inner = route.name === '(tabs)' ? [] : (route.state?.routes ?? []).map((child) => child.name);
+    const inner = route.name === '(tabs)' ? [] : (route.state?.routes ?? []).map(routeLabel);
 
-    return inner.length > 1 ? `${routeLabel(route)}(${inner.join('>')})` : routeLabel(route);
+    return inner.length > 0 ? `${routeLabel(route)}(${inner.join('>')})` : routeLabel(route);
   }).join('>');
   const area = tabStack.map(routeLabel).join('>');
-  const top = appFocused && appFocused.name !== '(tabs)' ? routeLabel(appFocused) : null;
+  const focusedInner = appFocused?.state?.routes?.[appFocused.state.index ?? appFocused.state.routes.length - 1];
+  const topRoute = focusedInner ?? appFocused;
+  const top = appFocused && appFocused.name !== '(tabs)' && topRoute ? routeLabel(topRoute) : null;
   const tab = tabRoute?.name ?? null;
   const tabsRoutes = appRoutes.filter((route) => route.name === '(tabs)').length;
+  const topLevelRoutes = appRoutes.filter((route) => route.name !== '(tabs)').length;
 
   return {
     app: appLine || 'none',
@@ -222,6 +231,7 @@ function summarize(root: NavNode | undefined) {
     tab,
     area: area || null,
     tabsRoutes,
+    topLevelRoutes,
     line: `${appLine}|${tab}|${area}`,
   };
 }

@@ -391,11 +391,14 @@ export function Sheet({
   visible,
   title,
   onClose,
+  onDismiss,
   children,
 }: {
   visible: boolean;
   title: string;
   onClose: () => void;
+  /** iOS only: the native dismissal finished. */
+  onDismiss?: () => void;
   children: ReactNode;
 }) {
   const { color, type: typeScale } = useTheme();
@@ -404,7 +407,7 @@ export function Sheet({
   const insets = useSafeAreaInsets();
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose} onDismiss={onDismiss}>
       <View style={[styles.sheetHost, layout.desktop && styles.sheetHostDesktop]}>
         <Pressable accessibilityLabel="Close" style={StyleSheet.absoluteFill} onPress={onClose} />
         <View style={[styles.sheet, layout.desktop && styles.sheetDesktop, { paddingBottom: Math.max(insets.bottom, space.lg) }]}>

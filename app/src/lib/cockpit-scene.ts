@@ -25,6 +25,19 @@ export function cockpitArea(pathname: string): CockpitArea | null {
   return null;
 }
 
+/**
+ * The tab path the cockpit hero follows. Profile, a mission or Product Detail
+ * covers the tabs without changing them, so those keep the last tab path.
+ * A cold link has no previous tab path, and the tabs then open on Home.
+ */
+export function shellPath(pathname: string, previous: string | null): string {
+  if (cockpitArea(pathname) != null) {
+    return pathname;
+  }
+
+  return previous ?? '/';
+}
+
 /** The five tab roots. Nested pages such as /sell/new are cockpit pages, but not roots. */
 export function isCockpitRoot(pathname: string): boolean {
   return pathname === '/' || pathname === '/sell' || pathname === '/freelance' || pathname === '/build' || pathname === '/recover';

@@ -121,11 +121,13 @@ This section describes the code as audited in October 2026. Update it as stages 
 
 ```mermaid
 flowchart TD
-  Root["app/_layout.tsx<br/>Gate + Slot"] --> App["(app)/_layout.tsx<br/>wrapper picked by pathname:<br/>NativeTabWash, AppShell or FocusShell"]
-  App --> S1["(app) Stack<br/>native ScreenStack 1"]
+  Root["app/_layout.tsx<br/>Gate + Slot"] --> App["(app)/_layout.tsx<br/>iOS phone: always NativeTabWash<br/>(FocusShell on /onboarding)<br/>elsewhere: AppShell"]
+  App --> S1["(app) Stack<br/>native ScreenStack 1<br/>anchor (tabs)"]
   S1 --> Tabs["(tabs)"]
   S1 --> Product["product/[id]<br/>fullScreenModal on iOS"]
-  S1 --> Secondary["progress, settings, friends, discover,<br/>opportunities/index, new, [id]<br/>undeclared: card, no animation"]
+  S1 --> Secondary["(secondary) group<br/>fullScreenModal on iOS phone, card elsewhere"]
+  Secondary --> SecStack["(secondary) Stack on iOS phone, Slot elsewhere<br/>settings, progress, friends,<br/>opportunities/index, new, [id]"]
+  S1 --> Disc["discover<br/>redirect only, card"]
   S1 --> Onb["onboarding<br/>FocusShell"]
   Tabs --> CS["CockpitShell<br/>iOS phone only"]
   CS --> NT["NativeTabs<br/>Home, Sell, Freelance, Build, Recover"]
@@ -173,11 +175,12 @@ The presenting view controller for each edge is chosen at runtime by react-nativ
 **`(app)` stack**, `app/src/app/(app)/_layout.tsx` **[Code]**
 
 - A `Stack` with `headerShown: false`, `animation: 'none'` and a transparent native container (`unstable_nativeProps`), so the shader shows through.
-- Declares only `(tabs)` and `product/[id]` (`fullScreenModal` plus `slide_from_bottom` on iOS, `card` plus `fade` on web, `gestureEnabled: true`).
-- Every other route gets the default `card` with no animation.
+- Declares `(tabs)`, `product/[id]` (`fullScreenModal` plus `slide_from_bottom` on iOS, `card` plus `fade` on web, `gestureEnabled: true`) and `(secondary)` (`secondaryPresentation()` in `app/src/lib/app-shell.ts`: `fullScreenModal` plus `slide_from_bottom` on iOS phone, `card` with no animation elsewhere).
+- Every other route (`discover`, `onboarding`, `bloom-preview`) gets the default `card` with no animation.
 - Redirects to `/onboarding` when there is no goal.
-- No `unstable_settings.initialRouteName`, so a cold deep link to `/product/:id` has no `(tabs)` underneath.
-- Wraps the stack in `FocusShell` (onboarding), `NativeTabWash` (iOS phone when `keepsNativeTabs(pathname)` is true) or `AppShell` (everything else). See problem 3.
+- `unstable_settings = { anchor: '(tabs)' }`. Expo Router reads `anchor ?? initialRouteName` (`getRoutesCore.js`), and `getStateFromPath` then puts `(tabs)` under a cold link to `/product/:id`, `/settings`, `/progress` or `/opportunities/*`. Verified in `app-shell.test.ts` against the real route files.
+- The wrapper comes from `appWrapper()` in `app/src/lib/app-shell.ts`: `FocusShell` on `/onboarding`, `NativeTabWash` for every other path on iOS phone, `AppShell` on web, Android and iPad. On iOS phone the element type no longer changes between tabs, Product Detail and secondary pages (problem 3). Onboarding still swaps it.
+- `NativeTabWash` renders the shader wash on every iOS phone path (`HeroWashSlot always`), so it is there behind the shell when a modal slides away.
 
 **NativeTabs**, `app/src/app/(app)/(tabs)/_layout.tsx` **[Code]**
 
@@ -189,6 +192,7 @@ The presenting view controller for each edge is chosen at runtime by react-nativ
 **CockpitShell**, `app/src/components/cockpit-shell.tsx` **[Code]**
 
 - Holds the published hero state and one `detent` state for the whole app, not one per tab.
+- The hero follows `tabPath`, the last cockpit path (`shellPath()` in `cockpit-scene.ts`). While Product Detail or a secondary page is on top, the hero keeps showing the tab underneath. The cover and resume logic still read the raw `pathname`.
 - Renders the tabs, an absolute `ScoreHeroView backdrop`, and `<MenuSheet cover={…} onCoverDismiss={dismissCreation}><CockpitBody/></MenuSheet>`.
 - Decides whether the Sell creation cover is shown, using `decideCreationCover`, `creationHandoffReady`, `abandonedSellStackKey` and `readSellStack` from `app/src/lib/cockpit-scene.ts`, plus `armedPath`, `blockedPath` and `previous` refs.
 - Dispatches `POP_TO_TOP` on the Sell stack key to clear abandoned creation routes.
@@ -232,7 +236,7 @@ In `setModalViewControllers`, if the previous modal `isBeingDismissed`, the fini
 `app/src/app/(app)/product/[id]/index.tsx`, `app/src/components/product-page.tsx` **[Code]**
 
 - Opened from the Sell board (`router.push('/product/:id')`), and by the Sell setup redirect when `setup_done` is true. The id is the Sell item id.
-- `close()` is `router.canGoBack() ? router.back() : router.replace('/sell')`.
+- `close()` is `router.canGoBack() ? router.back() : router.dismissTo('/sell')`. The fallback reuses the `(tabs)` underneath instead of replacing the detail route with a new one.
 - Continue Setup is `queueSellResume(id)` followed by `router.dismissTo('/sell')`.
 - Short editors (details, value, description, action, outcome, listings) use one React Native `<Modal presentationStyle="pageSheet">`, driven by local `sheet` state. "Add similar listing" swaps content inside the same modal (`adding` flag).
 - Saves go through `rememberSellItem` and do not navigate.
@@ -277,7 +281,8 @@ In `setModalViewControllers`, if the previous modal `isBeingDismissed`, the fini
 
 - React Native's Fabric `Modal` presents from `[self reactViewController]`. That is a view controller react-native-screens does not track. **[Code]**
 - A past device session observed the Message someone modal covering the tab bar and the cockpit sheet, so these do present over the cockpit. **[Code]** plus device observation.
-- `MessageSheet` calls `onClose()` and `router.push('/opportunities/:id')` in the same tick.
+- Message someone (and Start on a skill inside it) follows T9: on iOS the sheet closes, and `/opportunities/:id` is pushed from the `Sheet`'s `onDismiss`. Elsewhere it closes and pushes right away. Without this, `(app)` would present the mission modal while the RN `Modal` is still dismissing, and `setModalViewControllers` would hit the `beingDismissed` early return described under ScreenStack ownership.
+- Start a skill's "Edit" link pushes `/settings` while the sheet stays open. On iOS phone that presents the secondary modal above the RN `Modal`. **[Predicted]**, not checked on the device.
 
 **Profile, Progress and generic mission detail** **[Code]**
 
@@ -285,8 +290,12 @@ In `setModalViewControllers`, if the previous modal `isBeingDismissed`, the fini
 - `progress.tsx` is one page with a period selector and links to `/opportunities` and `/sell`.
 - Both are opened from the hero and from the sheet heading (`router.push('/settings')`, `router.push('/progress')` in `score-hero.tsx`).
 - `opportunities/[id].tsx` is the mission detail for every mission type. Home actions open it for all types, including Sell.
-- Its Back button is `canGoBack() ? back() : push(areaHref)`. The closed-result page has `push('/')` and `push(areaHref)`. Delete calls `replace(areaHref)`.
-- All three are `card` routes in the `(app)` stack. On iOS phone they trigger the shell remount (problem 3).
+- All of them, plus `friends`, `opportunities/index` and `opportunities/new`, live in one route group, `app/src/app/(app)/(secondary)/`. URLs are unchanged.
+- On iOS phone the group is one `fullScreenModal` with its own `Stack` (`(secondary)/_layout.tsx`). A page opened from inside the group (Progress, All activity, a mission) is a push in that stack, so there is only ever one native modal above the cockpit.
+- The group's `screenLayout` draws the frame: paper background, one `ScrollView`, and a header. The first page gets a Close button. Deeper pages get Back (pops one page) and Close (`navigation.getParent().goBack()`, which removes the whole group in one modal dismissal). The pages themselves are unchanged.
+- The group has its own `FeedbackProvider`, because the app-wide toast renders underneath native modals.
+- Off iOS phone the group layout is a plain `Slot`, so web, Android and iPad render these pages inside `AppShell` as before.
+- Mission detail: the in-page Back is hidden on iOS phone (the frame draws it). Elsewhere it is `canGoBack() ? back() : dismissTo(areaHref)`. "Back to Home" and "Back to this area" call `dismissTo`. Delete calls `back()` (falling back to `dismissTo(areaHref)`), then refreshes, because the tabs underneath stay mounted.
 
 **Swift tab-bar lift**, `app/modules/nolume-sheet-tab-bar/ios/NolumeSheetTabBar.swift` (do not modify) **[Code]**
 
@@ -305,16 +314,16 @@ In `setModalViewControllers`, if the previous modal `isBeingDismissed`, the fini
 | `/sell/new`, `/sell/setup/[id]`, `/sell/listed` | Sell stack route plus `MenuSheet` cover | X and Finish call `dismissTo('/sell')`; listed finish calls `replace('/sell/items/:id')` | Works through heuristics |
 | `/sell/items/[id]` and `edit`, `collage` | inside cockpit sheet | `leaveSell`, `back()` | Legacy, to retire |
 | `…/background` (both trees) | `formSheet` route | – | Dead |
-| `/product/[id]` | `(app)` `fullScreenModal` | `back()`, else `replace('/sell')` | Canonical |
+| `/product/[id]` | `(app)` `fullScreenModal` | `back()`, else `dismissTo('/sell')` | Canonical |
 | `/product/[id]/photos`, `edit`, `collage` | `formSheet` in stack #3, pushes in stack #4 | `back()` | Good pattern |
 | `/freelance`, `/recover` | tab | – | Complete |
 | `/freelance/new`, `/recover/new` | inside cockpit sheet (`CreateFrame`) | Back calls `push(backHref)`; done calls `replace(doneHref)` | Not a guided flow |
 | `/build`, `/build/new` | tab, cockpit | – | Placeholder |
-| `/opportunities/[id]` | `(app)` card | see above | Remounts shell |
-| `/opportunities`, `/opportunities/new` | `(app)` card | `PhoneShell` back | Remounts shell |
-| `/progress`, `/settings` | `(app)` card | `PhoneShell` back | Remounts shell |
-| `/friends` | `(app)` card, desktop rail only | – | Placeholder |
-| `/discover` | redirect only | – | Deferred |
+| `/opportunities/[id]` | `(secondary)` group: `fullScreenModal`, own stack | frame Close or Back; in-page links use `dismissTo` | Complete (Stage 2) |
+| `/opportunities`, `/opportunities/new` | `(secondary)` group | frame Close or Back; area buttons and mode redirects use `dismissTo` | Complete (Stage 2) |
+| `/progress`, `/settings` | `(secondary)` group | frame Close or Back | Complete (Stage 2) |
+| `/friends` | `(secondary)` group, desktop rail only | – | Placeholder |
+| `/discover` | redirect only, `dismissTo` the new home of the tool | – | Deferred |
 | System | image picker `OVER_FULL_SCREEN`, `Alert`, SwiftUI `Menu` | system | Aligned |
 
 ### 3.5 Known problems
@@ -358,6 +367,7 @@ Predicted failure modes (experiment E9 confirms which one happens):
 - Navigating to `/progress`, `/settings`, `/opportunities/*` or `/friends` changes the wrapper element type. React then unmounts and remounts the entire `(app)` stack, including `CockpitShell`, `MenuSheet`, the tabs, the cockpit sheet, the detent, scroll position and Home's local state.
 - Likely reason the swap exists: a `card` pushed in the `(app)` stack sits underneath the presented cockpit sheet. Remounting removes the cockpit. **[Predicted]**
 - So the fix has to present secondary pages modally, like Product Detail. Changing the wrapper alone would hide those pages under the cockpit.
+- **Fixed in Stage 2** (device-verified 2026-10-13, one `CockpitShell` mount per session): the wrapper is constant on iOS phone and the secondary pages are one `fullScreenModal` group. Onboarding still swaps to `FocusShell` and remounts (out of scope).
 
 **4. Duplicate navigation history from cross-navigator `push` and `replace`.** **[Code]**
 
@@ -372,6 +382,7 @@ Predicted failure modes (experiment E9 confirms which one happens):
 - `router.replace('/product/:id')` in `sell/setup/[id].tsx` (the `setup_done` guard) replaces the existing `(tabs)` route. The stack becomes `[product]`, and Close falls back to `replace('/sell')`.
 - Inside area stacks, `CreateFrame` Back is `router.push(backHref)` and `usePlaybookStart` finishes with `router.replace(doneHref)`. Both leave duplicate `index` routes (`app/src/components/create-flow.tsx`).
 - `StackClient` PUSH without `getId` or `dangerouslySingular` always creates a new route, so a double tap pushes two detail screens.
+- **Stage 2** (no duplicate `(tabs)` in the 2026-10-13 device session; the `dismissTo(tab)` paths themselves were not exercised there): the callers listed above (mission detail, All activity, Progress, feedback "again", `/opportunities/new?mode=`, `/discover`, the Product Detail close fallback) now use `dismissTo`. `POP_TO` finds the existing `(tabs)` by name, pops everything above it in one update, and passes the tab as `params.screen`. `NAVIGATE` would duplicate `(tabs)` too: StackRouter only reuses the *current* route by name unless `pop` is set. Both are asserted in `app-shell.test.ts`. Still open: the Sell setup `replace('/product/:id')`, `CreateFrame` and `usePlaybookStart` (Stages 3 and 5), and the web and iPad rail's `push` to tabs (off iOS phone, so no cockpit is duplicated).
 
 **5. Inconsistent navigation intentions.** **[Code]**
 
@@ -625,7 +636,7 @@ Not built yet; same convention as T7. `openProgress()` presents a `fullScreenMod
 
 ### T10. Cold deep link → Detail → Close (native wait only for the fallback tab switch)
 
-1. `unstable_settings.initialRouteName = '(tabs)'` in `(app)/_layout.tsx` makes Expo Router build `(tabs)` underneath, so the cockpit exists.
+1. `unstable_settings.initialRouteName = '(tabs)'` in `(app)/_layout.tsx` makes Expo Router build `(tabs)` underneath, so the cockpit exists. (Stage 2 uses the current name, `anchor`. Expo Router 57 reads `anchor ?? initialRouteName`.)
 2. The detail opens without an origin param.
 3. Close calls `back()` to `(tabs)`. If the tab underneath is not the category tab, switch to it after native settle.
 4. Legacy `/sell/items/:id` links redirect to `/product/:id`.
@@ -984,13 +995,40 @@ The source comment there points to upstream issue 1813. `onFinishTransitioning` 
 - **Production cover, same session as E1 (second run).** Sell something logs a normal native sequence: `cover.commit show=true`, `native.cockpit.willDisappear`, `native.sell-create.willAppear`, then `didAppear` 519 ms later. Category still rendered in the top third, over the hero and a blank cockpit. So the presentation lifecycle is correct and the fault is in the cover's layout or rendering. The same build drew E1 full height, so the fault is specific to the `MenuSheet` cover, not to `fullScreenModal`. Not root-caused. Stage 3 deletes the cover when E1 passes.
 - **Duplicate Sell routes.** After the cover was lost in E9 run 1, every Sell something tap pushed another `new` (`sell=index>setup/[id]:17>new>new>…`). This is I9 behaviour in the current code.
 
+#### Stage 2 acceptance — 2026-10-13
+
+iPhone 16 Pro, dev build, one session of about 220 s. Journeys refer to the Stage 2 checklist. Contract journeys F (Profile), G (Progress, All activity, Back, Close) and D (Home, mission, Close; run with Sell mission 37, not a Recover mission) are covered.
+
+| Journey | Result |
+| --- | --- |
+| A. Profile, Close (contract F) | **Pass**, visual and logs |
+| B. Progress, Close | **Pass** |
+| C. Home, mission 37, Close (contract D) | **Pass**. Back on Home, no tab switch |
+| D. Progress, All activity, Back, All activity, mission 35, Close (contract G) | **Pass** |
+| E. Tab switching, plus Profile from Freelance | **Pass**. Close returned to Freelance |
+| F. Product Detail 17 and 16, Close | **Pass** |
+| G. Repeats: Profile 5×, Progress 5×, Product Detail 3×, some under 250 ms after the previous `finishTransitioning` | **Pass** |
+| H. Cold deep link | **Inconclusive, deferred.** Expo documents that app-specific cold deep links are not supported when cold-launching a development build. The `(tabs)` anchor stays. It is verified only in `app-shell.test.ts`. Check it on a standalone build later. |
+| Not run | Explicit tab switch from a secondary page (`dismissTo(tab)`: no `POP_TO` in the session), Message someone (T9 handoff), feedback "again" |
+
+Log evidence:
+
+- `cockpit.mount count=1` once at launch, and no `cockpit.unmount` in the session (I1).
+- `app.wrapper wrapper=NativeTabWash path=/` once at launch, never again.
+- No `route.warn.duplicate-tabs` or `route.warn.stacked-top-level` (I7, I2). Every Close ends in `route.state app=(tabs)`.
+- Each presentation is one native modal: `native.cockpit.willDisappear` and `native.app.willAppear route=(secondary)` in the same millisecond, `didAppear` about 510 ms later, then one `native.app.finishTransitioning`. Each Close is the reverse: `native.cockpit.willAppear`, `didAppear` about 505 ms later, then one `finishTransitioning`.
+- Pushes inside the group log no `native.app.*` events (they are inside the group's own stack). Back logs `route.removed` for one page only, and the modal stays.
+- Close from three pages deep is one `GO_BACK`: three `route.removed` lines, then a single cockpit `willAppear`/`didAppear` pair. One modal was dismissed, not three.
+- `cockpit.hero` fires only on `JUMP_TO` tab switches. It never fires for Profile, Progress, missions or Product Detail.
+- Diagnostic gap: the first page of the group logs as `app=(tabs)>(secondary)` (or `(secondary):37`), without the inner page name. The nested state reaches the parent only after a push inside the group, which then logs `(secondary)(progress>opportunities/index)`. `route.focus` names the page in every case.
+
 ## 11. Roadmap
 
 Each stage is one implementation chat. A stage ships only after its acceptance journeys pass on the iPhone. The Swift module and the cockpit `Screen` in `MenuSheet` are untouched in every stage.
 
 ### Stage 1 — Diagnostics and native experiments
 
-Status: next.
+Status: done. Results in [10.1](#101-observed-results).
 
 - **Scope:**
   - Dev-only (`__DEV__`) navigation logging in a new `app/src/lib/nav-log.ts`. It records one `[nav]` line per event with the current tab, cockpit detent, top-level route, child route, pending transition and origin.
@@ -1014,6 +1052,38 @@ Status: next.
 - **Depends on:** Stage 1 logs, to prove there is no remount.
 - **Acceptance:** journeys D, F and G pass. The mount log shows one `CockpitShell` mount for the session. No second `(tabs)` route appears.
 - **Risk:** medium. Profile, Progress and missions visibly become modal presentations.
+
+Status: **done**. Device acceptance A–G passed on 2026-10-13, and cold deep links are deferred to a standalone build (see [Stage 2 acceptance](#stage-2-acceptance--2026-10-13)). The notes below were written before the device run. Device results live only in 10.1.
+
+What was built **[Code]**:
+
+- `app/src/lib/app-shell.ts`: `appWrapper()` (constant `NativeTabWash` on iOS phone except onboarding) and `secondaryPresentation()`.
+- `(app)/(secondary)/`: Profile, Progress, Friends and `opportunities/*` moved here (URLs unchanged), with a group layout that draws Close and Back.
+- `unstable_settings = { anchor: '(tabs)' }` on `(app)`.
+- The hero follows the last tab path (`shellPath()`), so it does not switch under Product Detail or a secondary page.
+- The problem 4 callers now use `dismissTo`. Message someone follows T9.
+- Diagnostics: `route.state` shows the pages inside a group once its nested state exists (`(secondary)(progress>opportunities/index)`; the first page alone logs as `(secondary)`). `route.warn.stacked-top-level` fires when more than one non-`(tabs)` route sits in `(app)` (I2). `cockpit.hero` logs whenever the hero's tab changes.
+- `app/src/lib/app-shell.test.ts` drives Expo Router's own `getStateFromPath`, `findDivergentState`, payload builder and `StackRouter` over the real route files. It covers: one wrapper type, presentation config, secondary routes in the group, pushes inside the group, Back vs Close, `dismissTo` reusing the same `(tabs)` key, push or navigate duplicating it, Product Detail close, and cold links building `(tabs)` underneath. Removing the anchor makes the cold-link tests fail.
+
+Deviations from the plan above **[Proposal]**:
+
+- **One group instead of one modal per route.** With per-route modals, Progress → All activity → mission stacks three modals. Close-to-tab or a tab link would then remove several in one update, which E3 showed orphans a controller. The group keeps one native modal, and Close always removes exactly one. 5.4's "own nested Stack" is shared by all secondary pages instead of one per page.
+- **`anchor`** instead of `initialRouteName` (same mechanism, current name).
+- **Frame instead of a header per page.** The group draws one header for all pages so the pages themselves stay unchanged.
+- **No dev assertion that throws.** I7 and I2 are warnings in the existing `[nav]` log, not exceptions.
+
+Known limits, deferred **[Code]**:
+
+- A cold link opens over Home, not the item's category tab. Switching to the fallback tab needs the native settle signal and an origin (T10 step 3, section 7). That belongs to the Stage 3 coordinator.
+- The legacy `/opportunities/new?mode=sell` lands on the Sell board on iOS phone instead of opening creation, because creation lives in `MenuSheet` until Stage 3, and presenting it while the secondary modal dismisses races two stacks (E9).
+- The feedback card's "again" link to `/freelance?start=message` opens the Message someone RN `Modal` while the secondary modal is still dismissing. Not checked on the device. A clean fix needs the T9-style native wait from the coordinator.
+- "Set a new goal" in Profile goes to `/onboarding`, which still swaps the wrapper, remounts, and finishes with `replace('/?welcome=1')`. Onboarding is out of scope.
+- `bloom-preview` (dev only) is still a `card` in `(app)` and would sit under the secondary modal.
+
+Predicted risks, still unchecked on the device **[Predicted]**:
+
+- A cold link presents two modals at once at launch: the cockpit sheet (`MenuSheet`) and the detail or secondary modal (`(app)`). That is the E9 race. It may lose one of them, or present the detail first. Needs a standalone build (dev builds do not support cold app links).
+- `dismissTo(tab)` from a secondary page dismisses the modal and switches the native tab in the same update. The tab switch is not a modal change, so E3 should not apply, but the hero and the cockpit body change during the dismissal animation.
 
 ### Stage 3 — Sell navigation foundation
 
@@ -1110,10 +1180,10 @@ For each journey, check: one `CockpitShell` mount, one `(tabs)` route, the tab b
 | Layouts | `app/src/app/_layout.tsx`, `app/src/app/(app)/_layout.tsx`, `app/src/app/(app)/(tabs)/_layout.tsx`, `(tabs)/{sell,freelance,build,recover}/_layout.tsx`, `product/[id]/_layout.tsx`, `product/[id]/photos/_layout.tsx` |
 | Cockpit | `app/src/components/cockpit-shell.tsx` (`CockpitShell`, `AreaStack`), `menu-sheet.tsx` (`MenuSheet`), `cockpit-context.tsx`, `score-hero.tsx` (`ScoreHeroView`, `MobileStage`), `hero-wash-host.tsx` (`NativeTabWash`, `HeroWashSlot`), `app/src/lib/cockpit-scene.ts` |
 | Swift lift | `app/modules/nolume-sheet-tab-bar/ios/NolumeSheetTabBar.swift`, `NolumeSheetTabBarSubscriber.swift` |
-| Shell | `app/src/components/shell.tsx` (`keepsNativeTabs`, `isNativeTabPath`, `AppShell`, `FocusShell`), `moves.tsx` (`Sheet`, `CockpitFrame`) |
+| Shell | `app/src/lib/app-shell.ts` (`appWrapper`, `secondaryPresentation`), `app/src/components/shell.tsx` (`AppShell`, `FocusShell`), `moves.tsx` (`Sheet`, `CockpitFrame`) |
 | Sell | `(tabs)/sell/index.tsx`, `new.tsx`, `listed.tsx`, `setup/[id].tsx`, `items/[id]/*`, `app/src/components/sell-flow.tsx`, `app/src/lib/sell-cache.ts` |
 | Product | `product/[id]/index.tsx`, `photos/*`, `app/src/components/product-page.tsx`, `editing-sheet.tsx`, `app/src/lib/product-detail.ts` |
 | Missions and areas | `(tabs)/index.tsx`, `freelance/*`, `recover/*`, `build/*`, `opportunities/*`, `app/src/components/create-flow.tsx`, `feedback.tsx` |
-| Secondary | `settings.tsx`, `progress.tsx`, `friends.tsx`, `discover.tsx` |
-| Tests | `app/src/lib/cockpit-scene.test.ts`, `sell.test.ts`, `product-detail.test.ts` |
+| Secondary | `(app)/(secondary)/_layout.tsx`, `settings.tsx`, `progress.tsx`, `friends.tsx`, `opportunities/*`; `(app)/discover.tsx` (redirect) |
+| Tests | `app/src/lib/cockpit-scene.test.ts`, `sell.test.ts`, `product-detail.test.ts`, `app-shell.test.ts` |
 | Library source | `node_modules/react-native-screens/ios/RNSScreenStack.mm`, `RNSScreen.mm`, `node_modules/expo-router/build/react-navigation/native-stack/views/NativeStackView.native.js`, `expo-router/build/global-state/getNavigationAction.js`, `routingQueue.js`, `layouts/StackClient.js`, `native-tabs/types.d.ts`, `react-native/React/Fabric/Mounting/ComponentViews/Modal/RCTModalHostViewComponentView.mm` |

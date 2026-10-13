@@ -38,20 +38,6 @@ export function isCockpitRoot(pathname: string): boolean {
   return COCKPIT_ROOTS.has(pathname);
 }
 
-/** Routes that sit in the iOS system tab bar. */
-export function isNativeTabPath(pathname: string): boolean {
-  return pathname === '/'
-    || pathname.startsWith('/sell')
-    || pathname.startsWith('/freelance')
-    || pathname.startsWith('/build')
-    || pathname.startsWith('/recover');
-}
-
-/** Product detail is a modal over the tabs, so the tab shell has to stay mounted. */
-export function keepsNativeTabs(pathname: string): boolean {
-  return isNativeTabPath(pathname) || pathname.startsWith('/product/');
-}
-
 function isSellFocus(pathname: string): boolean {
   return pathname === '/sell/new'
     || pathname === '/sell/listed'

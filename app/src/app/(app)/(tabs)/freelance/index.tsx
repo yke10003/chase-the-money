@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Platform, Pressable, Text, View } from 'react-native';
 
 import { getCurrentGoal, getDiscover, getProgress, listAllOpportunities, startPlaybook } from '@/api/endpoints';
 import type { Opportunity } from '@/api/types';
@@ -17,6 +17,7 @@ import { relativeDay } from '@/lib/dates';
 import { errorMessage } from '@/lib/errors';
 import { formatAmount, formatAmountRange } from '@/lib/money';
 import { attentionFor, missionGroup } from '@/lib/mission';
+import { navRequest } from '@/lib/nav-log';
 import { useRefreshProduct } from '@/state/query';
 import { useTheme } from '@/state/theme';
 
@@ -31,6 +32,33 @@ export default function FreelanceScreen() {
   const week = useQuery({ queryKey: ['progress', '7d'], queryFn: () => getProgress('7d') });
   const progress = useQuery({ queryKey: ['progress', 'goal', 'earn'], queryFn: () => getProgress('goal', 'earn') });
   const [sheet, setSheet] = useState<'message' | 'later' | null>(params.start === 'message' || params.start === 'work' ? 'message' : null);
+  const pendingMission = useRef<number | null>(null);
+
+  function openStarted(id: number) {
+    // On iOS the mission modal cannot be presented while this sheet is still
+    // dismissing (navigation.md, T9), so it opens from the sheet's onDismiss.
+    if (Platform.OS !== 'ios') {
+      setSheet(null);
+      router.push(`/opportunities/${id}`);
+      return;
+    }
+
+    navRequest('freelance.sheet.handoff', { id });
+    pendingMission.current = id;
+    setSheet(null);
+  }
+
+  function sheetDismissed() {
+    const id = pendingMission.current;
+
+    if (id == null) {
+      return;
+    }
+
+    pendingMission.current = null;
+    navRequest('freelance.sheet.dismissed', { id });
+    router.push(`/opportunities/${id}`);
+  }
 
   useEffect(() => {
     if (params.start === 'message' || params.start === 'work') {
@@ -110,7 +138,7 @@ export default function FreelanceScreen() {
           </View>
         }
       />
-      <MessageSheet visible={sheet === 'message'} onClose={() => setSheet(null)} />
+      <MessageSheet visible={sheet === 'message'} onClose={() => setSheet(null)} onStarted={openStarted} onDismiss={sheetDismissed} />
       <Sheet visible={sheet === 'later'} title="Not tracked yet" onClose={() => setSheet(null)}>
         <T variant="body" color={color.ink2}>
           A public post and a cold note will live here. They aren’t a move you can finish in the app yet.
@@ -153,9 +181,18 @@ function LeadCard({ mission, onPress }: { mission: Opportunity; onPress: () => v
   );
 }
 
-function MessageSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+function MessageSheet({
+  visible,
+  onClose,
+  onStarted,
+  onDismiss,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  onStarted: (id: number) => void;
+  onDismiss: () => void;
+}) {
   const { color } = useTheme();
-  const router = useRouter();
   const refresh = useRefreshProduct();
   const discover = useQuery({ queryKey: ['discover'], queryFn: getDiscover, enabled: visible });
   const [who, setWho] = useState('');
@@ -176,8 +213,7 @@ function MessageSheet({ visible, onClose }: { visible: boolean; onClose: () => v
     try {
       const created = await startPlaybook('freelance', { title: name, current_state: 'lead' });
       await refresh();
-      onClose();
-      router.push(`/opportunities/${created.data.id}`);
+      onStarted(created.data.id);
     } catch (caught) {
       setError(caught);
     } finally {
@@ -186,7 +222,7 @@ function MessageSheet({ visible, onClose }: { visible: boolean; onClose: () => v
   }
 
   return (
-    <Sheet visible={visible} title="Message someone" onClose={onClose}>
+    <Sheet visible={visible} title="Message someone" onClose={onClose} onDismiss={onDismiss}>
       <T variant="body" color={color.ink2}>One note. XP lands when it’s sent.</T>
       <Field label="Who is it for?" value={who} onChangeText={setWho} placeholder="Alex at Studio K" autoFocus />
       {error ? <InlineError message={errorMessage(error)} /> : null}
@@ -194,7 +230,7 @@ function MessageSheet({ visible, onClose }: { visible: boolean; onClose: () => v
       {discover.data ? (
         <View style={{ gap: space.sm, marginTop: space.sm }}>
           <T variant="eyebrow">Or start from a skill</T>
-          <Skills missions={discover.data.data.skill_missions} bare />
+          <Skills missions={discover.data.data.skill_missions} bare onStarted={onStarted} />
         </View>
       ) : null}
     </Sheet>

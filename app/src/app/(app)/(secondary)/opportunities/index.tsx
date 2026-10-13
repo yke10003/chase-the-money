@@ -95,9 +95,9 @@ export default function MissionsScreen() {
             body="Start from Sell, Freelance or Recover. This page is the full list, not the place you work from."
             action={
               <View style={{ flexDirection: 'row', gap: space.sm, flexWrap: 'wrap' }}>
-                <Button label="Sell" onPress={() => router.push('/sell')} />
-                <Button label="Freelance" tone="secondary" onPress={() => router.push('/freelance')} />
-                <Button label="Recover" tone="secondary" onPress={() => router.push('/recover')} />
+                <Button label="Sell" onPress={() => router.dismissTo('/sell')} />
+                <Button label="Freelance" tone="secondary" onPress={() => router.dismissTo('/freelance')} />
+                <Button label="Recover" tone="secondary" onPress={() => router.dismissTo('/recover')} />
                 <Button label="Custom mission" tone="ghost" onPress={() => router.push('/opportunities/new')} />
               </View>
             }
