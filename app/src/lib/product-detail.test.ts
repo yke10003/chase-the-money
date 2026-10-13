@@ -63,11 +63,12 @@ test('reordering moves the photo and keeps its cover flag', () => {
 
 test('a sell card opens the product page, and creation still owns setup', () => {
   const board = readFileSync(new URL('../app/(app)/(tabs)/sell/index.tsx', import.meta.url), 'utf8');
-  const setup = readFileSync(new URL('../app/(app)/(tabs)/sell/setup/[id].tsx', import.meta.url), 'utf8');
+  const setup = readFileSync(new URL('../app/(app)/create/sell/setup/[id].tsx', import.meta.url), 'utf8');
 
   assert.equal(board.includes('router.push(`/product/${item.id}`)'), true);
   assert.equal(board.includes('`/sell/items/${item.id}`'), false);
-  assert.equal(setup.includes('router.replace(`/product/${item.id}`)'), true);
+  // Replacing the creation modal with Product Detail is a modal-to-modal replace (navigation.md, E3).
+  assert.equal(setup.includes('router.replace(`/product/'), false);
   assert.equal(setup.includes('Ready for the next step'), false);
   assert.equal(setup.includes("shot === 'review'"), false);
 });

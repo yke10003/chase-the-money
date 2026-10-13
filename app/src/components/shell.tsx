@@ -39,9 +39,7 @@ export function isCockpitRoot(pathname: string): boolean {
 }
 
 function isSellFocus(pathname: string): boolean {
-  return pathname === '/sell/new'
-    || pathname === '/sell/listed'
-    || pathname.startsWith('/sell/setup')
+  return pathname.startsWith('/create/sell')
     || pathname.startsWith('/sell/items');
 }
 

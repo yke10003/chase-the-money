@@ -1,19 +1,20 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { View } from 'react-native';
 
 import { createSellItem, getSellCatalog } from '@/api/endpoints';
-import { ChoiceBlock, JourneyContinue, SellJourney, useLeaveSell } from '@/components/sell-flow';
+import { ChoiceBlock, JourneyContinue, SellJourney } from '@/components/sell-flow';
 import { InlineError, LoadingState } from '@/components/ui';
 import { space } from '@/design/tokens';
 import { errorMessage } from '@/lib/errors';
+import { navigation, parseTab } from '@/lib/navigation';
 import { rememberSellItem, startSellWrite } from '@/lib/sell-cache';
 import { useRefreshProduct } from '@/state/query';
 
 export default function SellNewScreen() {
   const router = useRouter();
-  const leave = useLeaveSell();
+  const origin = parseTab(useLocalSearchParams<{ origin?: string }>().origin) ?? 'sell';
   const refresh = useRefreshProduct();
   const client = useQueryClient();
   const catalog = useQuery({ queryKey: ['sell', 'catalog'], queryFn: getSellCatalog });
@@ -34,7 +35,8 @@ export default function SellNewScreen() {
       await rememberSellItem(client, created.data, token);
       await refresh();
       await rememberSellItem(client, created.data, token);
-      router.replace(`/sell/setup/${created.data.id}`);
+      // Replaces Category inside the creation stack. The (app) modal stays up.
+      router.replace(`/create/sell/setup/${created.data.id}?origin=${origin}`);
     } catch (caught) {
       setError(errorMessage(caught));
       setBusy(false);
@@ -67,7 +69,7 @@ export default function SellNewScreen() {
       title={phase === 'sub' ? 'Which kind?' : 'What kind of thing are you selling?'}
       lede={phase === 'sub' ? chosen?.label : 'This shapes the photos and the questions.'}
       onBack={phase === 'sub' ? () => setPhase('category') : undefined}
-      onExit={leave}
+      onExit={() => navigation.closeExperience()}
       footer={<JourneyContinue label="Continue" busy={busy} disabled={phase === 'sub' ? subcategory == null : category == null} onPress={continueOn} />}
     >
       {catalog.isLoading ? <LoadingState label="Loading" /> : null}

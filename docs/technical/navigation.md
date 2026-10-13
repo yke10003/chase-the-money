@@ -38,7 +38,7 @@ Library versions this was written against: Expo SDK 57, React Native 0.86, Expo 
 - The `(app)` Expo Router stack becomes the single owner of temporary top-level experiences: detail pages, creation flows, Profile, and Progress. On iOS they are presented above the cockpit.
 - Each creation flow is one stable presentation session with its own internal step navigation.
 - Contextual editors stay owned by the experience that opened them.
-- Cross-experience navigation goes through a thin typed navigation interface (`app/src/lib/navigation.ts`, not built yet). Expo Router stays authoritative for route state. There is no separate global navigation state machine.
+- Cross-experience navigation goes through a thin typed navigation interface (`app/src/lib/navigation.ts`, built in Stage 3 for Sell creation). Expo Router stays authoritative for route state. There is no separate global navigation state machine.
 - Handoffs between native presentations wait for a verified native lifecycle event, never a delay.
 
 ## 2. Approved product decisions
@@ -92,7 +92,7 @@ The return destination is the **originating main tab**.
 - Native swipe and back dismissal honour the same protection.
 - Unfinished editor changes are never saved automatically.
 
-**Creation drafts are different from editors.** A creation flow keeps meaningful draft progress when the user exits, following its domain rules. Sell setup saving the current step on exit is correct behaviour. A creation flow must not close after a failed required save while silently discarding unsaved input. The Identity and Details exits in Sell setup currently do this (see [section 3.5](#35-known-problems), problem 6).
+**Creation drafts are different from editors.** A creation flow keeps meaningful draft progress when the user exits, following its domain rules. Sell setup saving the current step on exit is correct behaviour. A creation flow must not close after a failed required save while silently discarding unsaved input. The Identity and Details exits in Sell setup did this until Stage 3 (see [section 3.5](#35-known-problems), problem 6, and T13).
 
 ### 2.6 Already Listed
 
@@ -127,6 +127,8 @@ flowchart TD
   S1 --> Product["product/[id]<br/>fullScreenModal on iOS"]
   S1 --> Secondary["(secondary) group<br/>fullScreenModal on iOS phone, card elsewhere"]
   Secondary --> SecStack["(secondary) Stack on iOS phone, Slot elsewhere<br/>settings, progress, friends,<br/>opportunities/index, new, [id]"]
+  S1 --> Create["create/sell group<br/>fullScreenModal on iOS phone, card elsewhere"]
+  Create --> CreateStack["create/sell Stack on iOS phone (animation none), Slot elsewhere<br/>new, listed, setup/[id]"]
   S1 --> Disc["discover<br/>redirect only, card"]
   S1 --> Onb["onboarding<br/>FocusShell"]
   Tabs --> CS["CockpitShell<br/>iOS phone only"]
@@ -134,14 +136,14 @@ flowchart TD
   CS --> Hero["ScoreHeroView backdrop"]
   CS --> MS["MenuSheet<br/>raw ScreenStack 2"]
   MS --> Cockpit["Screen cockpit, formSheet<br/>renders CockpitBody"]
-  MS --> Cover["Screen sell-create, fullScreenModal<br/>renders CreationBody"]
-  NT --> SellStack["Sell AreaStack<br/>index, new, listed, setup/[id],<br/>items/[id] index, edit, collage, background"]
+  NT --> SellStack["Sell AreaStack<br/>index, items/[id] index, edit, collage, background"]
   NT --> Others["Freelance, Build, Recover AreaStacks<br/>index, new"]
   Product --> PS["product/[id] Stack 3<br/>index, photos formSheet"]
   PS --> PhS["photos Stack 4<br/>index, edit, collage pushes,<br/>background formSheet"]
   SellStack -.->|"index and items publish via bodyRef"| Cockpit
-  SellStack -.->|"new, listed, setup publish via creationRef"| Cover
 ```
+
+`app.json` passes static `redirects` to the `expo-router` plugin: `/sell/new`, `/sell/listed` and `/sell/setup/[id]` go to their `/create/sell/…` routes. Expo Router applies them to `router.push` and friends and to incoming links, and adds the sources as root redirect routes (outside `(tabs)`). Metro needs a restart after `app.json` changes. **[Code]**
 
 Off iOS phone, `(tabs)/_layout.tsx` renders `<Slot/>` instead of `CockpitShell` and `NativeTabs`. Web tabs therefore unmount when the user switches. **[Code]**
 
@@ -158,7 +160,7 @@ flowchart TD
   PD ==>|"owner 3"| PH["Photos formSheet<br/>pushes Edit or Collage"]
   PH ==>|"RN Modal or system"| CR["Crop pageSheet<br/>or image picker overFullScreen"]
   PD ==>|"RN Modal"| PE["Product editors<br/>pageSheet"]
-  CK ==>|"owner 2"| SC["Sell creation<br/>fullScreenModal"]
+  CK ==>|"owner 1"| SC["Sell creation<br/>fullScreenModal"]
   SC ==>|"system"| IP["Image picker<br/>overFullScreen"]
   CK ==>|"RN Modal"| RM["Marketplaces, Message someone,<br/>Not tracked yet"]
 ```
@@ -171,11 +173,14 @@ The presenting view controller for each edge is chosen at runtime by react-nativ
 
 - `Slot` plus `Gate`, which redirects with `router.replace('/login')` or `router.replace('/')` for auth.
 - Status bar style depends on `pathname.startsWith('/product/')` and `isCockpitRoot`.
+- The app-wide `FeedbackProvider` draws its toast at the top on iOS (`placement="top"`), because the cockpit sheet covers the bottom of the root view. It still renders underneath native modals.
 
 **`(app)` stack**, `app/src/app/(app)/_layout.tsx` **[Code]**
 
 - A `Stack` with `headerShown: false`, `animation: 'none'` and a transparent native container (`unstable_nativeProps`), so the shader shows through.
-- Declares `(tabs)`, `product/[id]` (`fullScreenModal` plus `slide_from_bottom` on iOS, `card` plus `fade` on web, `gestureEnabled: true`) and `(secondary)` (`secondaryPresentation()` in `app/src/lib/app-shell.ts`: `fullScreenModal` plus `slide_from_bottom` on iOS phone, `card` with no animation elsewhere).
+- Declares `(tabs)`, `product/[id]` (`fullScreenModal` plus `slide_from_bottom` on iOS, `card` plus `fade` on web, `gestureEnabled: true`), `(secondary)` and `create/sell`. The last two use `secondaryPresentation()` in `app/src/lib/app-shell.ts`: `fullScreenModal` plus `slide_from_bottom` on iOS phone, `card` with no animation elsewhere.
+- `onFinishTransitioning` is always passed (no longer dev only). It logs `native.app.finishTransitioning` in dev and calls `navigation.nativeSettled()`.
+- A layout effect attaches the coordinator in `app/src/lib/navigation.ts` to the real router (`back`, `push`, `dismissTo`), the root state, the feedback toast and `navLog`, and forwards every container `state` event to `navigation.stateChanged()`. It is a layout effect so it is attached before any screen's mount effect runs.
 - Every other route (`discover`, `onboarding`, `bloom-preview`) gets the default `card` with no animation.
 - Redirects to `/onboarding` when there is no goal.
 - `unstable_settings = { anchor: '(tabs)' }`. Expo Router reads `anchor ?? initialRouteName` (`getRoutesCore.js`), and `getStateFromPath` then puts `(tabs)` under a cold link to `/product/:id`, `/settings`, `/progress` or `/opportunities/*`. Verified in `app-shell.test.ts` against the real route files.
@@ -187,17 +192,14 @@ The presenting view controller for each edge is chosen at runtime by react-nativ
 - On iOS phone: `<CockpitShell><NativeTabs>` with five triggers (`index`, `sell`, `freelance`, `build`, `recover`), `disableAutomaticContentInsets`, transparent.
 - `disablePopToTop` and `disableScrollToTop` are not set, so the iOS defaults apply (both enabled).
 - Area layouts render `AreaStack` from `cockpit-shell.tsx`: a `Stack` with transparent containers.
-- `sell/_layout.tsx` declares `index`, `new`, `listed` and `setup/[id]` with `animation: 'none'` ("These routes only fill the cover sheet").
+- `sell/_layout.tsx` declares only `index` (`animation: 'none'`). The legacy `items/[id]` pages are pushes in the same stack.
 
 **CockpitShell**, `app/src/components/cockpit-shell.tsx` **[Code]**
 
 - Holds the published hero state and one `detent` state for the whole app, not one per tab.
-- The hero follows `tabPath`, the last cockpit path (`shellPath()` in `cockpit-scene.ts`). While Product Detail or a secondary page is on top, the hero keeps showing the tab underneath. The cover and resume logic still read the raw `pathname`.
-- Renders the tabs, an absolute `ScoreHeroView backdrop`, and `<MenuSheet cover={…} onCoverDismiss={dismissCreation}><CockpitBody/></MenuSheet>`.
-- Decides whether the Sell creation cover is shown, using `decideCreationCover`, `creationHandoffReady`, `abandonedSellStackKey` and `readSellStack` from `app/src/lib/cockpit-scene.ts`, plus `armedPath`, `blockedPath` and `previous` refs.
-- Dispatches `POP_TO_TOP` on the Sell stack key to clear abandoned creation routes.
-- Consumes the Continue Setup resume: when `pathname === '/sell'`, it calls `takeSellResume()` and then `router.push('/sell/setup/:id')`.
-- The cover's `onDismissed` calls `runCreationExit()` or `leaveSell(router)`.
+- The hero follows `tabPath`, the last cockpit path (`shellPath()` in `cockpit-scene.ts`). While Product Detail, a secondary page or Sell creation is on top, the hero keeps showing the tab underneath.
+- Renders the tabs, an absolute `ScoreHeroView backdrop`, and `<MenuSheet><CockpitBody/></MenuSheet>`.
+- Since Stage 3 it has no creation or resume logic. It logs mounts, detent changes and hero changes in dev.
 
 **MenuSheet**, `app/src/components/menu-sheet.tsx` (do not change the cockpit screen) **[Code]**
 
@@ -209,23 +211,23 @@ The presenting view controller for each edge is chosen at runtime by react-nativ
           sheetGrabberVisible sheetLargestUndimmedDetentIndex="last"
           sheetExpandsWhenScrolledToEdge gestureEnabled={false}
           onSheetDetentChanged={…}>{children}</Screen>
-  {cover ? <Screen stackPresentation="fullScreenModal" screenId="sell-create"
-                   gestureEnabled onDismissed={onCoverDismiss}>{cover}</Screen> : null}
 </ScreenStack>
 ```
 
 - The sheet content must be the screen's direct child. react-native-screens only connects drag-to-expand to a scroll view it finds as a direct subview.
-- History from earlier sessions: creation was first a form sheet stacked on the cockpit. Presenting it from a second stack hid the cockpit, so it was moved into this stack. It later became `fullScreenModal` so the keyboard cannot shrink a form sheet and reveal Sell.
+- History from earlier sessions: creation was first a form sheet stacked on the cockpit. Presenting it from a second stack hid the cockpit, so it was moved into this stack. It later became `fullScreenModal` so the keyboard cannot shrink a form sheet and reveal Sell. Stage 3 moved it to the `(app)` stack (E1) and removed the `sell-create` screen and the `cover` and `onCoverDismiss` props. The cockpit screen is unchanged.
 - react-native-screens 4.26 applies `sheetInitialDetentIndex` only on the first presentation. There is no prop to change the detent later. **[Code]** (`RNSScreen.mm`, `_sheetHasInitialDetentSet`)
 
 **Native ScreenStack ownership** **[Code]**
 
 There are four react-native-screens stacks that present modals:
 
-1. The `(app)` stack.
-2. `MenuSheet`.
+1. The `(app)` stack: Product Detail, the secondary group and Sell creation.
+2. `MenuSheet`: only the cockpit sheet, once, at launch.
 3. `product/[id]`.
 4. `product/[id]/photos`.
+
+The `create/sell` and `(secondary)` nested stacks only push.
 
 Each `RNSScreenStack` tracks only its own `_presentedModals`. Updates are serialized within one stack (`_updatingModals`, `_scheduleModalsUpdate`), never across stacks. A stack that needs to present while another stack's modal is on screen presents from the topmost presented view controller.
 
@@ -235,30 +237,32 @@ In `setModalViewControllers`, if the previous modal `isBeingDismissed`, the fini
 
 `app/src/app/(app)/product/[id]/index.tsx`, `app/src/components/product-page.tsx` **[Code]**
 
-- Opened from the Sell board (`router.push('/product/:id')`), and by the Sell setup redirect when `setup_done` is true. The id is the Sell item id.
+- Opened from the Sell board (`router.push('/product/:id')`). The id is the Sell item id.
 - `close()` is `router.canGoBack() ? router.back() : router.dismissTo('/sell')`. The fallback reuses the `(tabs)` underneath instead of replacing the detail route with a new one.
-- Continue Setup is `queueSellResume(id)` followed by `router.dismissTo('/sell')`.
+- Continue Setup is `navigation.resumeCreation('sell', id)` (T1).
 - Short editors (details, value, description, action, outcome, listings) use one React Native `<Modal presentationStyle="pageSheet">`, driven by local `sheet` state. "Add similar listing" swaps content inside the same modal (`adding` flag).
 - Saves go through `rememberSellItem` and do not navigate.
 - There is no unsaved-changes guard.
 
-**Sell creation portal and cover** **[Code]**
+**Sell creation** (Stage 3) **[Code]**
 
-- The routes `/sell/new`, `/sell/listed` and `/sell/setup/[id]` live in the Sell tab stack and render `null` on iOS.
-- `SellJourney` (`app/src/components/sell-flow.tsx`) publishes their UI with `useCreationBody(node)` into module globals in `app/src/components/cockpit-context.tsx` (`creationRef`, `creationPath`, listeners). `CreationBody` renders that UI inside the `MenuSheet` cover.
-- `setCreationExit` and `runCreationExit` pass the exit handler through another global.
-- Category to Identity is `router.replace('/sell/new' → '/sell/setup/:id')` in the Sell stack. The cover survives only because `sameCreationSession` treats both paths as one session.
-- Setup steps (identity, photos, details, research, estimate, description) are local `step` state, seeded from the server `setup_step`. This part is a good pattern and stays.
-- Finish runs `finishSellItem`, then `refresh()`, then `leave()`, which is `router.dismissTo('/sell')`.
-- Exit saves the current step, then leaves. If identity is untouched, it calls `discardSellItem` and `forgetSellItem`.
-- When `item.setup_done` is true, the setup screen calls `router.replace('/product/:id')`.
+- `/create/sell/new` (Category), `/create/sell/listed` (Already listed) and `/create/sell/setup/[id]` live in `app/src/app/(app)/create/sell/`. On iOS phone the group is one `(app)` `fullScreenModal` with its own `Stack` (`animation: 'none'`, paper background). Elsewhere the group is a `Slot` inside `AppShell` (`FocusShell` focus mode on web).
+- Every creation URL carries `origin=<tab>`. The coordinator sets it when it pushes, and Category copies it into the setup URL.
+- `SellJourney` (`app/src/components/sell-flow.tsx`) renders in place. It no longer publishes into the cockpit or a cover. Its iOS phone chrome (glass X and Back, top padding `insets.top + 8` like Product Detail) depends only on `phone && Platform.OS === 'ios'`.
+- Category to Identity is `router.replace('/create/sell/setup/:id?origin=…')`, which targets the nested creation stack. The `(app)` route, and so the native modal, stays the same (T2, asserted in `app-shell.test.ts`).
+- Setup places the draft during render, not in an effect, so the replace does not commit an empty frame.
+- Setup steps (identity, photos, details, research, estimate, description) are local `step` state, seeded from the server `setup_step`. A refetch only moves the user forward when the server step changed since the last one seen (`serverStep` ref), so Back is not undone by a refetch.
+- Finish runs `finishSellItem` and `rememberSellItem`, then `navigation.finishCreation('Ready to list')`. `refresh()` runs in the background and re-applies the saved item when it is done.
+- X (Save & exit) saves the current step, then calls `navigation.closeExperience()` only if the save worked. If identity is untouched, it calls `discardSellItem` and `forgetSellItem` first. A failed save keeps the step open with the error (T13). A second X asks "Couldn't save this step" with "Keep editing" or "Leave without these changes".
+- When `item.setup_done` is true and the user is not finishing, setup calls `navigation.closeExperience()` and shows "This item is already set up" with an X in case that close is ignored.
 - The photo picker uses `UIImagePickerPresentationStyle.OVER_FULL_SCREEN`. A full-screen camera presented by creation had dismissed creation and the cockpit when it closed.
-- Already Listed (`listed.tsx`) finishes with `router.replace('/sell/items/:id')`, which lands on the legacy page.
+- Already Listed finishes with `navigation.finishCreation('Listing added')`. No detail page opens (2.6).
+- Entry points: Sell "Sell something" and "Already listed" (`startCreation`), Money Hunt (`resumeCreation` with the new id), Product Detail and the legacy item page "Continue setup" (`resumeCreation`), and `/opportunities/new?mode=sell` (`startCreation`, which closes the secondary modal first).
 
 **Sell AreaStack and the legacy item page** **[Code]**
 
 - `/sell/items/[id]` renders inside the cockpit sheet through `CockpitPage`.
-- "Back to Sell" calls `leaveSell`. "Continue setup" calls `router.push('/sell/setup/:id')`.
+- "Back to Sell" calls `leaveSell`. "Continue setup" calls `navigation.resumeCreation('sell', id)`.
 - Its `edit` and `collage` children are pushes in the Sell stack. `background` renders `null` because `publishBackgroundSheet` is never called.
 
 **Product Photos and editing** **[Code]**
@@ -311,7 +315,8 @@ In `setModalViewControllers`, if the previous modal `isBeingDismissed`, the fini
 | --- | --- | --- | --- |
 | `/` Home | tab, content in cockpit body | – | Complete |
 | `/sell` | tab | – | Complete |
-| `/sell/new`, `/sell/setup/[id]`, `/sell/listed` | Sell stack route plus `MenuSheet` cover | X and Finish call `dismissTo('/sell')`; listed finish calls `replace('/sell/items/:id')` | Works through heuristics |
+| `/create/sell/new`, `/create/sell/setup/[id]`, `/create/sell/listed` | `(app)` `create/sell` group: `fullScreenModal`, own stack | X and Finish go through `navigation.ts` to the origin tab (`back()`, or `dismissTo(origin)` when the tab underneath differs) | Complete (Stage 3) |
+| `/sell/new`, `/sell/setup/[id]`, `/sell/listed` | static redirects in `app.json` | – | Redirect |
 | `/sell/items/[id]` and `edit`, `collage` | inside cockpit sheet | `leaveSell`, `back()` | Legacy, to retire |
 | `…/background` (both trees) | `formSheet` route | – | Dead |
 | `/product/[id]` | `(app)` `fullScreenModal` | `back()`, else `dismissTo('/sell')` | Canonical |
@@ -354,12 +359,15 @@ Predicted failure modes (experiment E9 confirms which one happens):
 
 `MessageSheet` (an RN `Modal` dismissing while a route is pushed) is the same class of problem.
 
+**Stage 3** (done, device-accepted 2026-10-13): Sell creation is an `(app)` modal, so `MenuSheet` presents only the cockpit. Continue Setup is `back()`, wait for the `(app)` stack's `onFinishTransitioning`, check that `(tabs)` is on top, then `push` (T1). RN `Modal`s are still a separate owner (Message someone, T9).
+
 **2. Portal-based creation and route/presenter separation.** **[Code]**
 
 - Creation routes exist in the Sell tab stack. Their UI is published through module globals into a presentation owned by `CockpitShell`.
 - Whether the cover exists is derived from the pathname, the previous pathname and Sell stack snapshots, all hardcoded to Sell (`isSellCreationPath`, `readSellStack` looks for a route named `sell`).
 - A past session's logs showed `decideCreationCover` returning `present=false pop=true` on the first tap of a product. The route was popped and creation never appeared until a second tap.
 - The same pattern (`useCockpitBody`, `bodyRef`) renders every tab's content in one shared cockpit body. Components published this way run outside their own screen's route context, so `useLocalSearchParams` or `useIsFocused` inside them would read the wrong route.
+- **Stage 3** (done, device-accepted 2026-10-13): the creation portal and all its heuristics are gone. `SellJourney` renders in its own route and no longer publishes into the cockpit, including when its screen is hidden. `bodyRef`, `CockpitBody` and `useCockpitBody` stay for tab content and the Freelance and Recover `CreateFrame` (Stage 5).
 
 **3. Shell remounts caused by wrapper switching.** **[Code]**
 
@@ -382,7 +390,7 @@ Predicted failure modes (experiment E9 confirms which one happens):
 - `router.replace('/product/:id')` in `sell/setup/[id].tsx` (the `setup_done` guard) replaces the existing `(tabs)` route. The stack becomes `[product]`, and Close falls back to `replace('/sell')`.
 - Inside area stacks, `CreateFrame` Back is `router.push(backHref)` and `usePlaybookStart` finishes with `router.replace(doneHref)`. Both leave duplicate `index` routes (`app/src/components/create-flow.tsx`).
 - `StackClient` PUSH without `getId` or `dangerouslySingular` always creates a new route, so a double tap pushes two detail screens.
-- **Stage 2** (no duplicate `(tabs)` in the 2026-10-13 device session; the `dismissTo(tab)` paths themselves were not exercised there): the callers listed above (mission detail, All activity, Progress, feedback "again", `/opportunities/new?mode=`, `/discover`, the Product Detail close fallback) now use `dismissTo`. `POP_TO` finds the existing `(tabs)` by name, pops everything above it in one update, and passes the tab as `params.screen`. `NAVIGATE` would duplicate `(tabs)` too: StackRouter only reuses the *current* route by name unless `pop` is set. Both are asserted in `app-shell.test.ts`. Still open: the Sell setup `replace('/product/:id')`, `CreateFrame` and `usePlaybookStart` (Stages 3 and 5), and the web and iPad rail's `push` to tabs (off iOS phone, so no cockpit is duplicated).
+- **Stage 2** (no duplicate `(tabs)` in the 2026-10-13 device session; the `dismissTo(tab)` paths themselves were not exercised there): the callers listed above (mission detail, All activity, Progress, feedback "again", `/opportunities/new?mode=`, `/discover`, the Product Detail close fallback) now use `dismissTo`. `POP_TO` finds the existing `(tabs)` by name, pops everything above it in one update, and passes the tab as `params.screen`. `NAVIGATE` would duplicate `(tabs)` too: StackRouter only reuses the *current* route by name unless `pop` is set. Both are asserted in `app-shell.test.ts`. Still open: `CreateFrame` and `usePlaybookStart` (Stage 5), and the web and iPad rail's `push` to tabs (off iOS phone, so no cockpit is duplicated). Stage 3 removed the Sell setup `replace('/product/:id')`.
 
 **5. Inconsistent navigation intentions.** **[Code]**
 
@@ -392,6 +400,7 @@ Predicted failure modes (experiment E9 confirms which one happens):
 - "Finish" is `dismissTo('/sell')` for Sell and `replace(doneHref)` elsewhere.
 - Resume is a module global plus an effect.
 - The tests in `cockpit-scene.test.ts`, `sell.test.ts` and `product-detail.test.ts` assert these exact router strings.
+- **Stage 3** (done, device-accepted 2026-10-13): for Sell creation, start, resume, finish and close each have one coordinator intent. Already Listed no longer lands on the legacy page. The resume global is gone. The cover tests were replaced by planner tests (`navigation.test.ts`) and router tests that run those plans through Expo Router's `StackRouter` (`app-shell.test.ts`). The Home and legacy-card entry points are Stage 4.
 
 **6. Missing lifecycle coordination and unsaved-input safeguards.** **[Code]**
 
@@ -401,6 +410,7 @@ Predicted failure modes (experiment E9 confirms which one happens):
 - Product editor drafts are discarded on swipe.
 - In `sell/setup/[id].tsx`, `exit()` calls `saveIdentity(false).then(() => leave())` and `saveDetails(false).then(() => leave())`. Their `run()` catches the error, so the flow leaves even when the save failed. The typed name or details are lost. `saveEstimate` and `saveDescription` do check the result.
 - `finish` awaits a full `refresh()` (invalidating and refetching every product query) before closing, even though `rememberSellItem` already updated the board.
+- **Stage 3** (done, device-accepted 2026-10-13): the `(app)` stack's `onFinishTransitioning` is consumed by the coordinator. Identity and Details exits stay open when the save fails (T13). Finish no longer waits for `refresh()`. The rest of this list (editor guards) is Stage 4.
 
 **7. Per-tab scroll and detent memory.** **[Code]**, effect **[Predicted]**
 
@@ -424,7 +434,7 @@ flowchart TD
   Child --> Complex["Complex editors<br/>push inside the child Stack"]
 ```
 
-Target route map **[Proposal]**. Exact paths are settled in the stage that builds them.
+Target route map **[Proposal]**. Exact paths are settled in the stage that builds them. Built so far: `(secondary)` (Stage 2, one group for all secondary pages) and `create/sell` (Stage 3).
 
 | Route | Kind | iOS | Web |
 | --- | --- | --- | --- |
@@ -550,6 +560,7 @@ All items here are **[Proposal]**, implementing decision 2.3.
 - A handoff (Product Detail to Continue Setup) copies the origin from the current experience's param into the next one.
 - On iOS, the tab bar is hidden under a top-level `fullScreenModal`, so the tab underneath normally is the origin and closing is just `back()`.
   - `navigation.ts` compares the tab underneath with the recorded origin after closing. If they differ (cold deep link, web), it switches to the origin tab after the native settle signal.
+  - **As built in Stage 3:** the comparison happens when the intent is issued. If they differ, the close is `dismissTo(originHref)`, a single `POP_TO` that removes the modal and selects the origin tab in one update (the Stage 2 pattern). There is no separate tab switch after settle.
 - With no origin param (cold deep link, unknown entry point), the fallback is the category tab of the experience: Sell for products and Sell creation, the mission's area for missions.
 - An explicit tab change by the user (web rail, iOS tab bar when no experience is presented) dismisses the active top-level experience. The new tab becomes the origin for anything opened next.
 - Cache updates are independent of where the user lands. For example, `rememberSellItem` updates the Sell board even when Finish returns to Home.
@@ -570,6 +581,7 @@ The shared rules: Back means the previous step or screen. Close means dismiss th
 3. Setup opens at the saved `setup_step` from the cache. Nothing is marked complete.
 4. Do not use `replace` here unless E3 proves it safe. Calling `back()` and `push()` in the same tick is batched by Expo Router's `routingQueue`, so it behaves like `replace`.
 5. If E1 fails, the same sequence applies, and the push lands in the Sell stack where `MenuSheet` presents the cover. `pendingResume` and the `pathname === '/sell'` effect are removed either way.
+6. **As built in Stage 3:** E1 passed, so the push is `/create/sell/setup/:id?origin=…`. After the settle, the coordinator checks that `(tabs)` really is the `(app)` top. If something else took over the stack meanwhile, it logs `transition.aborted` and does not push. Expected dev log: `intent.resumeCreation`, `transition.dismiss.request`, `native.app.finishTransitioning`, `transition.dismiss.finished`, `transition.present.request`, `native.app.finishTransitioning`, `creation.presented`.
 
 ### T2. Sell Category → Identity (no native wait)
 
@@ -579,6 +591,7 @@ The shared rules: Back means the previous step or screen. Close means dismiss th
    - `router.setParams({ item: id })` when steps share one screen.
 3. The outer `fullScreenModal` never changes. The session key (the `(app)` route) stays constant (I3).
 4. Until E1 succeeds, the current `sameCreationSession` heuristic keeps doing this job.
+5. **As built in Stage 3:** the `replace` option, carrying `origin`. The heuristic is deleted.
 
 ### T3. Finish Sell creation → originating tab (native wait only for follow-up feedback)
 
@@ -589,6 +602,7 @@ The shared rules: Back means the previous step or screen. Close means dismiss th
 5. The success toast shows after native settle.
 6. Never: a success page, opening Product Detail automatically, or leaving a stale creation route in any stack.
 7. Already Listed finishes the same way, with its subtle success feedback **[Decision]**.
+8. **As built in Stage 3:** the toast is the app-wide `FeedbackProvider` card ("Ready to list", "Listing added"), drawn at the top on iOS so the cockpit sheet does not hide it. Already Listed still awaits `refresh()` before finishing, as it did before.
 
 ### T4. Close unfinished creation, keeping the draft (no native wait)
 
@@ -654,16 +668,65 @@ Not built yet; same convention as T7. `openProgress()` presents a `fullScreenMod
 2. Detail routes also use `dangerouslySingular`, so a second push of the same detail is a no-op even outside `navigation.ts`.
 3. Save and Finish buttons stay disabled while their request is in flight (the current `busy` pattern).
 4. The pending flag clears on the native settle signal, or on the next `pageFocused` navigation event, with a dev warning in that case. There is no timer.
+5. **As built in Stage 3:**
+   - **Pending** means the coordinator's own plan is waiting for a settle. Any intent then is ignored (`intent.ignored reason=pending`). Starting creation while creation is open is ignored too (`reason=creation-open`).
+   - **Busy** means the `(app)` route list changed outside a plan (a Close button, a card tap, a page that just mounted) and its settle has not arrived. The first intent then is deferred (`intent.deferred`) and runs on that settle (`intent.resumed`). A second one is ignored. This is what makes `/opportunities/new?mode=sell` wait for its own present before closing.
+   - Both clear only on `onFinishTransitioning`. There is no `pageFocused` fallback and no timer. If a settle never arrives, the next `(app)` transition's settle clears them (see the Stage 3 risks).
+   - `dangerouslySingular` is Stage 4 (`openProduct`).
 
 ### T13. Failed save during a creation exit
 
 1. X saves the current step. If the save fails, the flow stays open on that step, keeps the input, and shows the error inline.
 2. A second X while the error shows asks: "Keep editing" (default) or "Leave without these changes". Leaving keeps the draft as last saved and drops only this step's unsaved input, which the user has explicitly confirmed.
 3. This fixes `saveIdentity(false).then(leave)` and `saveDetails(false).then(leave)` in `sell/setup/[id].tsx` (Stage 3). The exact wording is settled in Stage 3, in English.
+4. **As built in Stage 3:** every saving exit (identity, discard of an untouched draft, details, estimate, description) leaves only on success. The confirmation is an `Alert` (`confirmAction` with custom labels): title "Couldn't save this step", message "Your draft keeps what was saved before.", buttons "Keep editing" (cancel style) and "Leave without these changes". Any new save attempt clears the flag. On web it is `window.confirm` with OK and Cancel.
 
 ## 9. Navigation interface
 
-This is **[Proposal]** and is not implemented. It will be one file, `app/src/lib/navigation.ts`, plus a test file `app/src/lib/navigation.test.ts`.
+Stage 3 built the Sell creation part **[Code]**, in `app/src/lib/navigation.ts` and `app/src/lib/navigation.test.ts`. The file does not import `expo-router`, so the planner and the coordinator run under `tsx --test`.
+
+```ts
+type MainTab = 'home' | 'sell' | 'freelance' | 'build' | 'recover';
+type CreationKind = 'sell' | 'sell-listed';
+
+type Intent =
+  | { type: 'startCreation'; kind: CreationKind }
+  | { type: 'resumeCreation'; kind: 'sell'; itemId: number }
+  | { type: 'finishCreation'; feedback?: string }
+  | { type: 'closeExperience' };
+
+type NavSnapshot = {
+  tabUnderneath: MainTab | null;
+  topLevel: { route: string; origin: MainTab | null } | null; // origin from the route's (or its focused page's) params
+  pending: boolean;
+  nativeSettle: boolean; // iOS only. Elsewhere steps run back to back.
+};
+
+type Step =
+  | { op: 'push'; href: string }
+  | { op: 'back' }
+  | { op: 'dismissTo'; href: string }
+  | { op: 'awaitNativeSettle'; top: string } // the (app) route expected on top after the settle
+  | { op: 'toast'; message: string }
+  | { op: 'ignore'; reason: string };
+
+export function planTransition(now: NavSnapshot, intent: Intent): Step[]; // pure
+export function readSnapshot(root: unknown, pending: boolean, nativeSettle: boolean): NavSnapshot;
+
+export const navigation: {
+  attach(deps: NavigatorDeps): () => void; // (app)/_layout.tsx
+  stateChanged(): void;                     // container 'state' event
+  nativeSettled(): void;                    // (app) onFinishTransitioning
+  startCreation(kind?: CreationKind): void;
+  resumeCreation(kind: 'sell', itemId: number): void;
+  finishCreation(feedback?: string): void;
+  closeExperience(): void;
+};
+```
+
+Differences from the proposal below: a module singleton instead of a `useNavigation()` hook (screens call `navigation.startCreation(…)` directly, and nothing needs React state), `dismissTo` instead of `switchTab` (section 7), and an expected top on each wait so an interrupted handoff aborts instead of stacking. The other intents (`openProduct`, `openMission`, `openProfile`, `openProgress`, `switchTab`) are later stages.
+
+The original proposal, kept for the later stages **[Proposal]**:
 
 ```ts
 type MainTab = 'home' | 'sell' | 'freelance' | 'build' | 'recover';
@@ -714,7 +777,7 @@ export function nativeSettled(): void;
 
 **Must not:**
 - Replace Expo Router.
-- Keep a copy of the navigation stack. The only module state is the `pending` flag and the queued remainder of one plan.
+- Keep a copy of the navigation stack. The only module state is the `pending` flag and the queued remainder of one plan. (As built: also the `busy` flag, one deferred intent, and the last seen `(app)` route keys, used only to detect that a native transition started.)
 - Store mission or product business state.
 - Grow into a global state machine.
 - Touch the cockpit detents or the Swift tab-bar lift.
@@ -1022,6 +1085,53 @@ Log evidence:
 - `cockpit.hero` fires only on `JUMP_TO` tab switches. It never fires for Profile, Progress, missions or Product Detail.
 - Diagnostic gap: the first page of the group logs as `app=(tabs)>(secondary)` (or `(secondary):37`), without the inner page name. The nested state reaches the parent only after a push inside the group, which then logs `(secondary)(progress>opportunities/index)`. `route.focus` names the page in every case.
 
+#### Stage 3 acceptance — 2026-10-13
+
+iPhone 16 Pro, dev build, three runs on 2026-10-13. Journey letters in the run 2 table follow the Stage 3 device checklist, not the contract journeys in section 12. Contract journeys A, B (8 of 20 cycles), H (partly) and J are covered.
+
+Device run 1 (journey A, fixed) **[Measured]**: Finish saved the item (`setup_step=done`) and logged `intent.finishCreation`, then `intent.ignored reason=nothing-open`, so creation stayed open. The coordinator read `(app)` at the top of the container state. Expo Router mounts the root layout inside its one `__root` route (`ExpoRoot.js`), so the reader found no `(app)` at all. The same run shows the other symptoms: Continue setup pushed over Product Detail without closing it (`route.warn.stacked-top-level`), the wait after the present aborted with no `actual`, and busy never triggered. The test fixtures had the same flat shape, so they passed. The reader now goes through `__root`, both test fixtures use the real nesting, and a regression test replays the run.
+
+Device run 2 (iPhone 16 Pro, 13 October, six recordings) **[Measured]**. The pasted `[nav]` log runs about 313 s, from roughly 16:07:37 to 16:12:50. It covers recordings 1–3 only. Recordings 4 (airplane mode, 16:13:18) and 5 (photo library, 16:14:58) are visual only.
+
+| Journey | Recording | Log evidence | Result |
+| --- | --- | --- | --- |
+| A, create and Finish (item 19) | 16:07:32 | `startCreation` → `creation.presented` after 704 ms. Category → setup is one `REPLACE` with no `native.app` events, so the modal stayed. Finish: `transition.dismiss.request` → `transition.dismiss.finished` after 618 ms, then "Ready to list". | **Pass** |
+| B, Continue setup | 16:10:19 | 8 handoffs (item 15 ×6, items 21 and 23): each `dismiss.request` → `dismiss.finished` → `present.request` (same ms) → `creation.presented`. No `stacked-top-level`. | **Pass for 8 warm cycles.** The 20-cycle run and the double tap are pending. |
+| E, Back inside setup | 16:11:37 | Back is local step state with no route events. Each creation has exactly one `REPLACE` (Category → setup), so no session was replaced. | **Pass** (visual) |
+| C, Save & exit | 16:10–16:12 | 13 `closeExperience`, each followed by `dismiss.finished`. Drafts 20–23 appear on the board. | **Pass** |
+| D, failed save | 16:13:18 | Not in the log. Category error shown while offline. On Estimate, X, X again → "Couldn't save this step" → leave → Sell. | **Pass** (visual). Every step offline is pending. |
+| I, photo library | 16:14:58 | Not in the log. The picker opens over creation and returns to the same step. Save & exit → draft with photo on the board. | **Pass** (visual) |
+| J, Find something | – | No log line existed for it. | **Failed in run 2**, fixed below. **Pass in run 3** (visual). |
+
+Across the whole log: `cockpit.mount count=1` once, every `(app)` transition ends in `native.app.finishTransitioning`, and there are no `route.warn.*`, `transition.aborted`, `intent.ignored` or `intent.deferred` lines.
+
+Find something (run 2) **[Code]**:
+- **Cause.** "Find something" never navigates. It flips `hunt` on the Sell screen, which renders `MoneyHunt` inline. That is the intended Money Hunt (cockpits.md), and it is unchanged since the native cockpit landed, so it is not a Stage 3 regression.
+- **Why it looked dead.** `MoneyHunt` was the last item in the cockpit sheet, after the board, "Already listed" and the marketplaces link. With 9+ cards it opened far below the resting sheet, so the tap looked dead and a second tap hid it again.
+- **Ruled out.** `GET /v1/discover` returns 200 with 8 categories, and both hero actions run through the same `actionsRef` path that "Sell something" uses.
+- **Fix.** Money Hunt now renders first in the sheet, and the toggle logs `sell.hunt.toggle open=… loaded=…`.
+- **Handoff.** After a successful start Money Hunt clears the found item and `busy`, because it stays mounted under the modal and would otherwise show a stuck Start button when creation closes. The handoff itself is `resumeCreation` from the Sell tab: one push, no close step.
+
+Device run 3 (16:43, after the Find something fix) **[Measured]**, visual only: Find something opens Money Hunt at the top of the Sell sheet, and it works functionally. No `[nav]` log was shared for this run. So the `sell.hunt.toggle` line and the Money Hunt → creation log sequence are not confirmed on the device. The plan for that handoff is covered by `navigation.test.ts`.
+
+Not run, or only partly run. These are follow-ups, not verified:
+
+- 20 consecutive Continue setup cycles (contract B). 8 warm cycles passed.
+- A deliberate double tap during a handoff (contract M, T12). No `intent.ignored` appears in any log, so the guard never fired on the device.
+- A full Already Listed completion (contract I).
+- Home-origin creation and return (contract B2). There is no Home entry point until Stage 4. The origin logic is covered by tests only.
+- The Stage 2 journeys (F, G, D) after Stage 3. Run 2 shows one cockpit mount and no warnings, but no secondary page was opened.
+- Offline saves on every step, and backgrounding the app during creation (rest of contract H). Category and Estimate were checked offline.
+- Cold links to the old `/sell/new`, `/sell/listed` and `/sell/setup/:id` URLs. The redirects are covered only by `app-shell.test.ts`. Like Stage 2's H, cold links need a standalone build.
+- The web check of the creation flow.
+
+Minor UX follow-ups, not navigation:
+
+- Offline errors show raw native text (`ExpoModulesCore/Promise.swift:56`, `UnexpectedException`) instead of a short connection message.
+- The inline Money Hunt presentation is not ideal. A redesign or removal is explicitly deferred. Because it opens at the top of the sheet's scroll content, a sheet already scrolled down still hides it.
+- A few transitional frames show the system photo picker partly over the form before it settles.
+- The Sell cockpit shows briefly between Product Detail closing and creation opening. That is T1 as designed.
+
 ## 11. Roadmap
 
 Each stage is one implementation chat. A stage ships only after its acceptance journeys pass on the iPhone. The Swift module and the cockpit `Screen` in `MenuSheet` are untouched in every stage.
@@ -1075,7 +1185,7 @@ Deviations from the plan above **[Proposal]**:
 Known limits, deferred **[Code]**:
 
 - A cold link opens over Home, not the item's category tab. Switching to the fallback tab needs the native settle signal and an origin (T10 step 3, section 7). That belongs to the Stage 3 coordinator.
-- The legacy `/opportunities/new?mode=sell` lands on the Sell board on iOS phone instead of opening creation, because creation lives in `MenuSheet` until Stage 3, and presenting it while the secondary modal dismisses races two stacks (E9).
+- The legacy `/opportunities/new?mode=sell` lands on the Sell board on iOS phone instead of opening creation, because creation lives in `MenuSheet` until Stage 3, and presenting it while the secondary modal dismisses races two stacks (E9). Stage 3 changed it to `navigation.startCreation('sell')`.
 - The feedback card's "again" link to `/freelance?start=message` opens the Message someone RN `Modal` while the secondary modal is still dismissing. Not checked on the device. A clean fix needs the T9-style native wait from the coordinator.
 - "Set a new goal" in Profile goes to `/onboarding`, which still swaps the wrapper, remounts, and finishes with `replace('/?welcome=1')`. Onboarding is out of scope.
 - `bloom-preview` (dev only) is still a `card` in `(app)` and would sit under the secondary modal.
@@ -1097,6 +1207,44 @@ Predicted risks, still unchecked on the device **[Predicted]**:
 - **Must not change:** wizard business logic, Phase 3 and 3.1 Sell behaviour, photo stability, `rememberSellItem` and `startSellWrite` ordering, or the `fullScreenModal` type.
 - **Acceptance:** journeys A, B, H, plus Already Listed and Money Hunt start, each passing 20 times in a row for B.
 - **Risk:** high when E1 passed, low to medium otherwise.
+
+Status: **done** (2026-10-13). The flows listed as passed in [Stage 3 acceptance](#stage-3-acceptance--2026-10-13) were accepted on the iPhone. The cases listed there as not run are follow-ups, not verified. The notes below were written before the device runs, except where they say otherwise. Device results live only in 10.1.
+
+
+What was built **[Code]**:
+
+- `app/src/lib/navigation.ts`: the planner and coordinator from section 9, with T1, T3, T4 and the T12 rules. It logs `intent.*`, `intent.ignored`, `intent.deferred`, `intent.resumed`, `transition.dismiss.request`, `transition.dismiss.finished`, `transition.present.request`, `creation.presented` and `transition.aborted` through `navLog`.
+- `(app)/create/sell/` with `_layout.tsx`, `new.tsx`, `listed.tsx` and `setup/[id].tsx` (moved with `git mv` from `(tabs)/sell/`). The group is declared in `(app)/_layout.tsx` with the secondary presentation.
+- `(app)/_layout.tsx` attaches the coordinator and always passes `onFinishTransitioning`.
+- Entry points use the coordinator: the Sell hero action and "Already listed", Money Hunt, Product Detail and legacy item "Continue setup", and `/opportunities/new?mode=sell`.
+- Removed: the `MenuSheet` cover and its props, all cover, resume and abandoned-stack logic in `CockpitShell`, the creation portal in `cockpit-context.tsx`, the creation heuristics in `cockpit-scene.ts` (`sameCreationSession`, `creationAvailabilityChanged`, `creationHandoffReady`, `isSellCreationPath`, `isSellCreationRouteName`, `readSellStack`, `decideCreationCover`, `abandonedSellStackKey`, `holdsCockpitScene`), `queueSellResume`, `takeSellResume`, `useLeaveSell`, and the `useCockpitBody` `active` flag. `leaveSell` stays for the legacy item page.
+- Setup: T13, the Back snap-forward fix, the `setup_done` guard closing the flow, render-time placement, and the non-blocking `refresh()`.
+- `app.json` redirects for the three old URLs.
+- Tests: `navigation.test.ts` (18: plan tables, origins, double taps, abort, defer, a mount-time intent, finish to Home with toast). `app-shell.test.ts` adds 7 router tests over the real route files: the route tree, start, the Category→Identity replace targeting the nested stack, the Continue Setup plan run through `StackRouter` (one `(tabs)`, same key), finish to the origin via `back` or `POP_TO`, and the redirects. The cover heuristic tests are deleted, and the source-string tests point at the new files. Total: 73 tests before the device runs. The device fixes added a `__root` regression test, a Money Hunt handoff test and a Find something placement test, for 76.
+
+Deviations **[Proposal]**:
+
+- **`dismissTo(origin)` instead of a tab switch after settle**, when the origin differs from the tab underneath (section 7). One `POP_TO`, as in Stage 2.
+- **Busy and deferred**, on top of pending (T12). Needed because a screen's mount effect, and a Close button outside the coordinator, change the `(app)` stack without a plan.
+- **The coordinator attaches in a layout effect**, because a child's mount effect runs before the parent's `useEffect`.
+- **Redirects in `app.json`** instead of redirect screens. The sources become root routes, so nothing creation-like is left in the Sell tab.
+- **Creation top padding** is `insets.top + 8` (as on Product Detail and the secondary group), instead of the cover's fixed 20.
+- **The app-wide toast is drawn at the top on iOS.** At the bottom it sat under the cockpit sheet.
+- **No `openProduct`.** That and `dangerouslySingular` are Stage 4.
+- **Home has no Sell creation entry point** today. Home starters go to `/sell?start=hunt` and Home actions open mission detail. So "Home, start Sell creation, Finish → Home" and B2 cannot be run until Stage 4. The origin logic for Home is covered by tests only.
+
+Known limits **[Code]**:
+
+- Money Hunt kept its `busy` spinner after handing off, because the component stays mounted under the modal. Fixed in device run 2.
+- Money Hunt opens at the top of the sheet's scroll content. If the sheet was scrolled down first, it is still off-screen until you scroll up.
+- Already Listed still awaits `refresh()` before finishing.
+- `/opportunities/new?mode=sell` drops its `start` param. Category never read it.
+
+Predicted risks **[Predicted]**:
+
+- If an `(app)` settle never arrives (E2 saw an early settle when another stack presented at the same time), the coordinator stays pending or busy until the next `(app)` transition settles. Symptom: a Continue Setup or Sell something tap that logs `intent.ignored reason=pending` or `intent.deferred` and does nothing. There is no timer by design.
+- An early settle during a dismissal (E2's condition) would pass the top check, because route state is already final, and present while UIKit is still dismissing. That needs another stack to present at the same moment, which no Stage 3 path does.
+- The hero is unchanged under creation, because creation is not a cockpit area. Observed in run 2: no `cockpit.hero` line during creation, and the Sell cockpit returned each time.
 
 ### Stage 4 — Detail and editor consistency
 
@@ -1134,7 +1282,7 @@ Discover has no stage (2.8).
 | Kind | Tooling | Used for | Stages |
 | --- | --- | --- | --- |
 | Pure transition tests | Existing `npm test` (`tsx --test src/lib/*.test.ts`) | `planTransition` tables: origins, duplicate drops, handoff steps, fallbacks | 3, 4, 5 |
-| Route integration tests | Would need `jest-expo` and `expo-router/testing-library`. Not installed and not planned without approval. | – | – |
+| Route integration tests | `app-shell.test.ts` loads Expo Router's own route builder, path parser, `findDivergentState` and `StackRouter` over the real files under `src/app` (no `jest-expo`) | Which navigator an href targets, what a plan does to the `(app)` stack, cold links, redirects | 2, 3 |
 | Component tests | None in the repo. Not planned. | – | – |
 | Native lifecycle logging | Stage 1 `[nav]` logs | I1, I2, I7, I10. Experiment evidence | All |
 | Physical iPhone verification | iPhone 16 Pro, dev build | Every journey below. Anything involving the cockpit, the lift, sheets or gestures | All |
@@ -1171,7 +1319,7 @@ For each journey, check: one `CockpitShell` mount, one `(tabs)` route, the tab b
 4. Back is `back()`. Close goes through `closeExperience` or `back()`. Never navigate to a URL to "go back".
 5. Any editor declares its dirty guard (5.5, 5.6). Any creation flow declares its exit rule (T4, T13).
 6. Pickers use `OVER_FULL_SCREEN`.
-7. Do not publish UI into `CockpitBody` or `CreationBody` from a screen that is not a tab index.
+7. Do not publish UI into `CockpitBody` from a screen that is not a tab index.
 
 ## 14. Source index
 
@@ -1181,9 +1329,10 @@ For each journey, check: one `CockpitShell` mount, one `(tabs)` route, the tab b
 | Cockpit | `app/src/components/cockpit-shell.tsx` (`CockpitShell`, `AreaStack`), `menu-sheet.tsx` (`MenuSheet`), `cockpit-context.tsx`, `score-hero.tsx` (`ScoreHeroView`, `MobileStage`), `hero-wash-host.tsx` (`NativeTabWash`, `HeroWashSlot`), `app/src/lib/cockpit-scene.ts` |
 | Swift lift | `app/modules/nolume-sheet-tab-bar/ios/NolumeSheetTabBar.swift`, `NolumeSheetTabBarSubscriber.swift` |
 | Shell | `app/src/lib/app-shell.ts` (`appWrapper`, `secondaryPresentation`), `app/src/components/shell.tsx` (`AppShell`, `FocusShell`), `moves.tsx` (`Sheet`, `CockpitFrame`) |
-| Sell | `(tabs)/sell/index.tsx`, `new.tsx`, `listed.tsx`, `setup/[id].tsx`, `items/[id]/*`, `app/src/components/sell-flow.tsx`, `app/src/lib/sell-cache.ts` |
+| Navigation | `app/src/lib/navigation.ts` (coordinator), `app/src/lib/nav-log.ts` (dev logging), `app/app.json` (`expo-router` redirects) |
+| Sell | `(tabs)/sell/index.tsx`, `items/[id]/*`, `(app)/create/sell/_layout.tsx`, `new.tsx`, `listed.tsx`, `setup/[id].tsx`, `app/src/components/sell-flow.tsx`, `app/src/lib/sell-cache.ts` |
 | Product | `product/[id]/index.tsx`, `photos/*`, `app/src/components/product-page.tsx`, `editing-sheet.tsx`, `app/src/lib/product-detail.ts` |
 | Missions and areas | `(tabs)/index.tsx`, `freelance/*`, `recover/*`, `build/*`, `opportunities/*`, `app/src/components/create-flow.tsx`, `feedback.tsx` |
 | Secondary | `(app)/(secondary)/_layout.tsx`, `settings.tsx`, `progress.tsx`, `friends.tsx`, `opportunities/*`; `(app)/discover.tsx` (redirect) |
-| Tests | `app/src/lib/cockpit-scene.test.ts`, `sell.test.ts`, `product-detail.test.ts`, `app-shell.test.ts` |
+| Tests | `app/src/lib/navigation.test.ts`, `app-shell.test.ts`, `cockpit-scene.test.ts`, `sell.test.ts`, `product-detail.test.ts` |
 | Library source | `node_modules/react-native-screens/ios/RNSScreenStack.mm`, `RNSScreen.mm`, `node_modules/expo-router/build/react-navigation/native-stack/views/NativeStackView.native.js`, `expo-router/build/global-state/getNavigationAction.js`, `routingQueue.js`, `layouts/StackClient.js`, `native-tabs/types.d.ts`, `react-native/React/Fabric/Mounting/ComponentViews/Modal/RCTModalHostViewComponentView.mm` |

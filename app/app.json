@@ -33,7 +33,16 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
-      "expo-router",
+      [
+        "expo-router",
+        {
+          "redirects": [
+            { "source": "/sell/new", "destination": "/create/sell/new" },
+            { "source": "/sell/listed", "destination": "/create/sell/listed" },
+            { "source": "/sell/setup/[id]", "destination": "/create/sell/setup/[id]" }
+          ]
+        }
+      ],
       [
         "expo-splash-screen",
         {

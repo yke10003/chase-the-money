@@ -1,20 +1,18 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { View } from 'react-native';
 
 import { createListedItem, getSellCatalog } from '@/api/endpoints';
-import { ChoiceBlock, JourneyContinue, SellJourney, useLeaveSell } from '@/components/sell-flow';
+import { ChoiceBlock, JourneyContinue, SellJourney } from '@/components/sell-flow';
 import { Field, InlineError, LoadingState, MoneyField } from '@/components/ui';
 import { space } from '@/design/tokens';
 import { errorMessage } from '@/lib/errors';
 import { majorToMinor } from '@/lib/money';
+import { navigation } from '@/lib/navigation';
 import { rememberSellItem, startSellWrite } from '@/lib/sell-cache';
 import { useRefreshProduct } from '@/state/query';
 
 export default function ListedItemScreen() {
-  const router = useRouter();
-  const leave = useLeaveSell();
   const refresh = useRefreshProduct();
   const client = useQueryClient();
   const catalog = useQuery({ queryKey: ['sell', 'catalog'], queryFn: getSellCatalog });
@@ -67,7 +65,7 @@ export default function ListedItemScreen() {
       await rememberSellItem(client, created.data, token);
       await refresh();
       await rememberSellItem(client, created.data, token);
-      router.replace(`/sell/items/${created.data.id}`);
+      navigation.finishCreation('Listing added');
     } catch (caught) {
       setError(errorMessage(caught));
       setBusy(false);
@@ -79,7 +77,7 @@ export default function ListedItemScreen() {
       step="estimate"
       title="It's already listed"
       lede="We'll track the asking price. You can add photos after."
-      onExit={leave}
+      onExit={() => navigation.closeExperience()}
       footer={<JourneyContinue label="Add the listing" busy={busy} onPress={() => void save()} />}
     >
       {catalog.isLoading ? <LoadingState label="Loading" /> : null}

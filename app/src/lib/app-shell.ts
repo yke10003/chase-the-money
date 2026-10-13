@@ -24,8 +24,9 @@ export type TopLevelPresentation = {
 
 /**
  * Profile, Progress, All activity and mission detail share one (secondary)
- * route. On iOS phone the cockpit sheet is already presented, so a card would
- * sit underneath it. Everywhere else they stay ordinary pages in AppShell.
+ * route, and Sell creation is one create/sell route. On iOS phone the cockpit
+ * sheet is already presented, so a card would sit underneath it. Everywhere
+ * else they stay ordinary pages in AppShell.
  */
 export function secondaryPresentation(os: string, phone: boolean): TopLevelPresentation {
   if (os === 'ios' && phone) {

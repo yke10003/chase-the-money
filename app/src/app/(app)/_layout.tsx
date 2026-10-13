@@ -1,9 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
-import { Stack, usePathname, useRouter } from 'expo-router';
-import { useEffect } from 'react';
+import { Stack, useNavigationContainerRef, usePathname, useRouter } from 'expo-router';
+import { useEffect, useLayoutEffect } from 'react';
 import { Platform, View } from 'react-native';
 
 import { getCurrentGoal } from '@/api/endpoints';
+import { useFeedback } from '@/components/feedback';
 import { NativeTabWash } from '@/components/hero-wash-host';
 import { AppShell, FocusShell } from '@/components/shell';
 import { ErrorState } from '@/components/ui';
@@ -12,6 +13,7 @@ import { space } from '@/design/tokens';
 import { appWrapper, secondaryPresentation } from '@/lib/app-shell';
 import { errorMessage } from '@/lib/errors';
 import { appFinishTransitioning, appScreenListeners, navLog, useRouteStateLog } from '@/lib/nav-log';
+import { navigation } from '@/lib/navigation';
 import { useAuth } from '@/state/auth';
 import { useBoot } from '@/state/boot';
 import { useTheme } from '@/state/theme';
@@ -19,6 +21,13 @@ import { useTheme } from '@/state/theme';
 // A cold link to a detail or secondary page still builds the tabs, and the
 // cockpit, underneath it. Close then reveals that shell instead of nothing.
 export const unstable_settings = { anchor: '(tabs)' };
+
+// The native signal that a present or dismiss on this stack has finished.
+// navigation.ts waits for it between closing one top-level modal and opening the next.
+function stackFinished() {
+  appFinishTransitioning();
+  navigation.nativeSettled();
+}
 
 export default function AppLayout() {
   const { user, loading } = useAuth();
@@ -37,9 +46,30 @@ export default function AppLayout() {
   const redirecting = goal.isSuccess && goal.data === null && !allowedWithoutGoal;
   const settled = goal.isSuccess || goal.isError;
   const wrapper = appWrapper({ os: Platform.OS, phone, pathname });
-  const secondary = secondaryPresentation(Platform.OS, phone);
+  const topLevel = secondaryPresentation(Platform.OS, phone);
+  const containerRef = useNavigationContainerRef();
+  const feedback = useFeedback();
 
   useRouteStateLog();
+
+  // A layout effect, so it is attached before any screen's mount effect asks it to navigate.
+  useLayoutEffect(() => {
+    const detach = navigation.attach({
+      getRootState: () => (containerRef.isReady() ? containerRef.getRootState() : undefined),
+      back: () => router.back(),
+      push: (href) => router.push(href),
+      dismissTo: (href) => router.dismissTo(href),
+      notify: (message) => feedback({ title: message }),
+      log: navLog,
+      nativeSettle: Platform.OS === 'ios',
+    });
+    const unsubscribe = containerRef.addListener('state', () => navigation.stateChanged());
+
+    return () => {
+      unsubscribe();
+      detach();
+    };
+  }, [containerRef, feedback, router]);
 
   // A different wrapper element remounts the whole (app) stack, cockpit included.
   useEffect(() => {
@@ -80,7 +110,7 @@ export default function AppLayout() {
       // covers it on every main page.
       unstable_nativeProps={{
         nativeContainerStyle: { backgroundColor: 'transparent' },
-        onFinishTransitioning: __DEV__ ? appFinishTransitioning : undefined,
+        onFinishTransitioning: stackFinished,
       }}
       screenOptions={{ headerShown: false, animation: 'none', contentStyle: { backgroundColor: 'transparent' } }}
       screenListeners={__DEV__ ? appScreenListeners : undefined}
@@ -98,9 +128,17 @@ export default function AppLayout() {
       <Stack.Screen
         name="(secondary)"
         options={{
-          presentation: secondary.presentation,
-          animation: secondary.animation,
-          contentStyle: { backgroundColor: secondary.presentation === 'fullScreenModal' ? color.paper : 'transparent' },
+          presentation: topLevel.presentation,
+          animation: topLevel.animation,
+          contentStyle: { backgroundColor: topLevel.presentation === 'fullScreenModal' ? color.paper : 'transparent' },
+        }}
+      />
+      <Stack.Screen
+        name="create/sell"
+        options={{
+          presentation: topLevel.presentation,
+          animation: topLevel.animation,
+          contentStyle: { backgroundColor: topLevel.presentation === 'fullScreenModal' ? color.paper : 'transparent' },
         }}
       />
     </Stack>

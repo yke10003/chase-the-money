@@ -39,7 +39,8 @@ export default function RootLayout() {
         <ThemeProvider>
           <AuthProvider>
             <BootProvider>
-              <FeedbackProvider>
+              {/* On iOS phone the cockpit form sheet covers the bottom of this view. */}
+              <FeedbackProvider placement={Platform.OS === 'ios' ? 'top' : 'bottom'}>
                 <ThemedTree />
               </FeedbackProvider>
             </BootProvider>

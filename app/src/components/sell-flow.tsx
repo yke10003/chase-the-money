@@ -1,16 +1,13 @@
 import { Host, Image as SwiftImage, Button as SwiftButton } from '@expo/ui/swift-ui';
 import { buttonBorderShape, buttonStyle, controlSize, disabled as swiftDisabled, frame } from '@expo/ui/swift-ui/modifiers';
-import { usePathname, useRouter } from 'expo-router';
-import { createElement, useEffect, type DragEvent, type ReactNode } from 'react';
+import { createElement, type DragEvent, type ReactNode } from 'react';
 import { Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { setCreationExit, useCockpit, useCockpitBody, useCreationBody } from '@/components/cockpit-context';
 import { Icon, type IconName } from '@/components/icon';
 import { Button } from '@/components/ui';
 import { useLayout } from '@/design/layout';
 import { font, space, weight } from '@/design/tokens';
-import { isSellCreationPath } from '@/lib/cockpit-scene';
 import { JOURNEY, journeyIndex } from '@/lib/sell';
 import { useTheme } from '@/state/theme';
 
@@ -57,11 +54,10 @@ export function SellJourney({
 }) {
   const { color, type: typeScale } = useTheme();
   const phone = useLayout().phone;
-  const pathname = usePathname();
-  const cockpit = useCockpit();
   const insets = useSafeAreaInsets();
   const index = journeyIndex(step);
-  const creation = Boolean(cockpit) && phone && Platform.OS === 'ios' && isSellCreationPath(pathname);
+  // Only the create/sell routes use this. On iOS phone they are one full-screen modal.
+  const creation = phone && Platform.OS === 'ios';
   const header = (
     <View style={{ gap: space.md }}>
       {creation ? (
@@ -106,7 +102,7 @@ export function SellJourney({
   const phoneBody = creation ? (
     <ScrollView
       style={{ flex: 1, backgroundColor: color.paper }}
-      contentContainerStyle={{ paddingTop: 20, paddingHorizontal: 20, paddingBottom: 48, gap: space.lg }}
+      contentContainerStyle={{ paddingTop: insets.top + 8, paddingHorizontal: 20, paddingBottom: 48, gap: space.lg }}
       keyboardShouldPersistTaps="handled"
       automaticallyAdjustKeyboardInsets
     >
@@ -122,21 +118,6 @@ export function SellJourney({
       {footer ? <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: Math.max(insets.bottom, 16) + (Platform.OS === 'ios' ? 64 : 0), borderTopWidth: 1, borderTopColor: color.line }}>{footer}</View> : null}
     </View>
   );
-  useCockpitBody(phoneBody, !creation && Boolean(cockpit) && phone);
-  useCreationBody(creation ? phoneBody : null);
-  useEffect(() => {
-    if (!creation) {
-      return;
-    }
-
-    setCreationExit(onExit);
-    return () => setCreationExit(null);
-  }, [creation, onExit]);
-
-  if (creation) {
-    return null;
-  }
-
   if (phone) {
     return phoneBody;
   }
@@ -229,10 +210,8 @@ export function JourneyContinue({
   busy?: boolean;
   disabled?: boolean;
 }) {
-  const cockpit = useCockpit();
   const phone = useLayout().phone;
-  const pathname = usePathname();
-  const creation = Boolean(cockpit) && phone && Platform.OS === 'ios' && isSellCreationPath(pathname);
+  const creation = phone && Platform.OS === 'ios';
   const inactive = disabled || busy;
 
   if (creation) {
@@ -250,31 +229,10 @@ export function JourneyContinue({
   return <Button label={label} onPress={onPress} busy={busy} disabled={disabled} size="lg" iconRight="arrowRight" />;
 }
 
-export function useLeaveSell() {
-  const router = useRouter();
-
-  return () => leaveSell(router);
-}
-
 /**
  * Pop back to the Sell overview that is already on the stack.
- * replace('/sell') builds a new overview and react-native-screens plays that
- * as a push, which runs after the creation sheet has finished dismissing.
+ * replace('/sell') would build a second overview.
  */
 export function leaveSell(router: { dismissTo: (href: '/sell') => void }) {
   router.dismissTo('/sell');
-}
-
-let pendingResume: number | null = null;
-
-/** Product Detail asks Sell to open setup after the product modal has gone. */
-export function queueSellResume(id: number) {
-  pendingResume = id;
-}
-
-export function takeSellResume(): number | null {
-  const id = pendingResume;
-  pendingResume = null;
-
-  return id;
 }

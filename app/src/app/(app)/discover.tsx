@@ -20,6 +20,7 @@ function useDiscoverUi() {
 }
 import { errorMessage } from '@/lib/errors';
 import { majorToMinor } from '@/lib/money';
+import { navigation } from '@/lib/navigation';
 import { rememberSellItem, startSellWrite } from '@/lib/sell-cache';
 import { useRefreshProduct } from '@/state/query';
 
@@ -135,7 +136,6 @@ function ToolHeader({ type, title, lead }: { type: OpportunityType; title: strin
 export function MoneyHunt({ categories }: { categories: string[] }) {
   const { color, styles, typeColor } = useDiscoverUi();
   const layout = useLayout();
-  const router = useRouter();
   const refresh = useRefreshProduct();
   const client = useQueryClient();
   const [category, setCategory] = useState<string | null>(null);
@@ -173,7 +173,11 @@ export function MoneyHunt({ categories }: { categories: string[] }) {
       await rememberSellItem(client, created.data, token);
       await refresh();
       await rememberSellItem(client, created.data, token);
-      router.push(`/sell/setup/${created.data.id}`);
+      navigation.resumeCreation('sell', created.data.id);
+      // The hunt stays mounted under creation. Clear the found item so it is ready for the next one.
+      setItemName('');
+      setWorth('');
+      setBusy(false);
     } catch (caught) {
       setError(caught);
       setBusy(false);

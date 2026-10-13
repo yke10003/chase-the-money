@@ -18,13 +18,14 @@ import type { PlaybookOutcome, SellItemView } from '@/api/types';
 import { GlassClose, GlassIconButton } from '@/components/glass-close';
 import { EditingSheet } from '@/components/editing-sheet';
 import { Icon } from '@/components/icon';
-import { ChoiceBlock, queueSellResume, sellIcon } from '@/components/sell-flow';
+import { ChoiceBlock, sellIcon } from '@/components/sell-flow';
 import { Button, Field, InlineError, LoadingState, MoneyField, T } from '@/components/ui';
 import { useLayout } from '@/design/layout';
 import { font, space, weight } from '@/design/tokens';
 import { errorMessage } from '@/lib/errors';
 import { formatAmount, formatAmountRange, majorToMinor, minorToMajorInput } from '@/lib/money';
 import { navRequest } from '@/lib/nav-log';
+import { navigation } from '@/lib/navigation';
 import { coverIndex, listingPlace, listingStatus, productFacts } from '@/lib/product-detail';
 import { categoryIcon, rememberSellItem, startSellWrite } from '@/lib/sell-cache';
 import { listingSuggestion } from '@/lib/sell';
@@ -126,8 +127,7 @@ export function ProductPage() {
 
   function resume() {
     navRequest('product.resume.request', { id: record.id });
-    queueSellResume(record.id);
-    router.dismissTo('/sell');
+    navigation.resumeCreation('sell', record.id);
   }
 
   const body = (

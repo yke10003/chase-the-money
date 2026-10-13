@@ -13,6 +13,7 @@ import { GlassSurface } from '@/components/glass';
 import { Icon, type IconName } from '@/components/icon';
 import { ListingPhoto } from '@/components/listing-photo';
 import { leaveSell } from '@/components/sell-flow';
+import { navigation } from '@/lib/navigation';
 import { Button, Field, InlineError, LoadingState, MoneyField, T } from '@/components/ui';
 import { useLayout } from '@/design/layout';
 import { font, space, weight } from '@/design/tokens';
@@ -173,7 +174,7 @@ export default function SellItemScreen() {
         {asking ? <T variant="body" color={color.ink2}>{asking} asking{item.listed_on ? ` on ${item.listed_on}` : ''}</T> : null}
         {!item.setup_done ? <T variant="body" color={color.ink2}>Setup incomplete. Next: {item.next_step_label}</T> : <T variant="small" color={color.ink3}>{item.stage_label}</T>}
       </View>
-      {!item.setup_done ? <Button label="Continue setup" iconRight="arrowRight" size="lg" onPress={() => router.push(`/sell/setup/${item.id}`)} /> : null}
+      {!item.setup_done ? <Button label="Continue setup" iconRight="arrowRight" size="lg" onPress={() => navigation.resumeCreation('sell', item.id)} /> : null}
       {item.listing_description && next?.playbook_key !== 'prepare_item' ? (
         <View style={{ gap: 6 }}>
           <T variant="eyebrow">Listing description</T>

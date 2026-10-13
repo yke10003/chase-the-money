@@ -1,13 +1,12 @@
-import { Stack, useNavigationContainerRef, usePathname, useRootNavigationState, useRouter } from 'expo-router';
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { Stack, usePathname } from 'expo-router';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 
-import { CockpitBody, CockpitProvider, CreationBody, creationPublishedNow, runCreationExit, useCreationAvailability, type CockpitAction, type PublishedScore } from '@/components/cockpit-context';
+import { CockpitBody, CockpitProvider, type CockpitAction, type PublishedScore } from '@/components/cockpit-context';
 import { MenuSheet } from '@/components/menu-sheet';
 import { homePaint, ScoreHeroView } from '@/components/score-hero';
-import { leaveSell, takeSellResume } from '@/components/sell-flow';
 import { useTheme } from '@/state/theme';
-import { abandonedSellStackKey, cockpitArea, creationHandoffReady, decideCreationCover, holdsCockpitScene, isCockpitRoot, isSellCreationPath, readSellStack, shellPath, type CockpitArea, type SellStackSnap } from '@/lib/cockpit-scene';
+import { cockpitArea, isCockpitRoot, shellPath, type CockpitArea } from '@/lib/cockpit-scene';
 import { navLog } from '@/lib/nav-log';
 
 let cockpitMounts = 0;
@@ -49,9 +48,6 @@ function backdropFor(area: CockpitArea, accent: ReturnType<typeof useTheme>['acc
  */
 export function CockpitShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const router = useRouter();
-  const pathRef = useRef(pathname);
-  pathRef.current = pathname;
   const { color, accent } = useTheme();
   const actionsRef = useRef<CockpitAction[]>([]);
   const [published, setPublished] = useState<PublishedScore | null>(null);
@@ -59,8 +55,8 @@ export function CockpitShell({ children }: { children: ReactNode }) {
   const publish = useCallback((next: PublishedScore) => {
     setPublished((current) => (sameScore(current, next) ? current : next));
   }, []);
-  // Profile, Progress and Product Detail sit above the tabs. The hero keeps
-  // showing the tab underneath them.
+  // Profile, Progress, Product Detail and Sell creation sit above the tabs.
+  // The hero keeps showing the tab underneath them.
   const [lastTabPath, setLastTabPath] = useState<string | null>(null);
   const tabPath = shellPath(pathname, lastTabPath);
 
@@ -70,52 +66,7 @@ export function CockpitShell({ children }: { children: ReactNode }) {
 
   const area = cockpitArea(tabPath);
   const rooted = isCockpitRoot(tabPath) && published != null && published.path === tabPath;
-  const held = published != null && holdsCockpitScene(tabPath, published.path);
-  const score = rooted || held ? published : area ? backdropFor(area, accent) : null;
-  const navigationRef = useNavigationContainerRef();
-  const rootState = useRootNavigationState();
-  const poppedStack = useRef<string | null>(null);
-  const previous = useRef<{ path: string | null; snap: SellStackSnap | null }>({ path: null, snap: null });
-  const blockedPath = useRef<string | null>(null);
-  const armedPath = useRef<string | null>(null);
-  const snap = readSellStack(rootState);
-  const snapKey = snap ? `${snap.selected}:${snap.key}:${snap.focusedName}:${snap.depth}` : '';
-  useCreationAvailability();
-  const publishedCreation = creationPublishedNow();
-  const handoffReady = creationHandoffReady({
-    pathname,
-    previousPath: previous.current.path,
-    publishedPath: publishedCreation.path,
-    hasNode: publishedCreation.node != null,
-  });
-
-  if (!isSellCreationPath(pathname)) {
-    blockedPath.current = null;
-  }
-
-  const decision = decideCreationCover({
-    pathname,
-    previousPath: previous.current.path,
-    snap,
-    previousSnap: previous.current.snap,
-    blocked: blockedPath.current === pathname,
-  });
-
-  if (decision.pop) {
-    blockedPath.current = pathname;
-  }
-
-  if (!decision.present) {
-    armedPath.current = null;
-  } else if (handoffReady) {
-    armedPath.current = pathname;
-  }
-
-  const showCover = decision.present && armedPath.current === pathname;
-  const showCoverRef = useRef(showCover);
-  showCoverRef.current = showCover;
-  const [, setCoverEpoch] = useState(0);
-  const decisionLine = `${pathname}|${decision.present}|${decision.pop}|${handoffReady}|${showCover}`;
+  const score = rooted ? published : area ? backdropFor(area, accent) : null;
 
   useEffect(() => {
     cockpitMounts += 1;
@@ -131,84 +82,6 @@ export function CockpitShell({ children }: { children: ReactNode }) {
   useEffect(() => {
     navLog('cockpit.hero', { area, tabPath });
   }, [area, tabPath]);
-
-  useEffect(() => {
-    navLog('cover.decision', { path: pathname, present: decision.present, pop: decision.pop, handoffReady, show: showCover });
-  }, [decisionLine]);
-
-  useEffect(() => {
-    navLog('cover.commit', { show: showCover, path: pathname });
-  }, [showCover]);
-
-  useLayoutEffect(() => {
-    const live = creationPublishedNow();
-
-    if (!decision.present || live.path !== pathname || live.node == null || armedPath.current === pathname) {
-      return;
-    }
-
-    armedPath.current = pathname;
-    setCoverEpoch((value) => value + 1);
-  });
-
-  useEffect(() => {
-    previous.current = { path: pathname, snap };
-
-    if (pathname === '/sell') {
-      const resumeId = takeSellResume();
-
-      if (resumeId != null) {
-        navLog('resume.take', { id: resumeId, push: `/sell/setup/${resumeId}` });
-        router.push(`/sell/setup/${resumeId}`);
-      }
-    }
-
-    if (!decision.pop || !decision.stackKey) {
-      return;
-    }
-
-    navLog('cockpit.popToTop', { reason: 'blocked', path: pathname });
-    navigationRef.current?.dispatch({
-      type: 'POP_TO_TOP',
-      target: decision.stackKey,
-    });
-  }, [decision.pop, decision.present, decision.stackKey, navigationRef, pathname, router, showCover, snapKey]);
-
-  useEffect(() => {
-    if (isSellCreationPath(pathname)) {
-      return;
-    }
-
-    const stackKey = abandonedSellStackKey(rootState);
-
-    if (!stackKey) {
-      poppedStack.current = null;
-      return;
-    }
-
-    if (poppedStack.current === stackKey) {
-      return;
-    }
-
-    poppedStack.current = stackKey;
-    navLog('cockpit.popToTop', { reason: 'abandoned', path: pathname });
-    navigationRef.current?.dispatch({
-      type: 'POP_TO_TOP',
-      target: stackKey,
-    });
-  }, [navigationRef, pathname, rootState]);
-
-  function dismissCreation() {
-    navLog('native.sell-create.dismissed', { show: showCoverRef.current, path: pathRef.current });
-
-    if (!showCoverRef.current || !isSellCreationPath(pathRef.current)) {
-      return;
-    }
-
-    if (!runCreationExit()) {
-      leaveSell(router);
-    }
-  }
 
   return (
     <CockpitProvider publish={publish} actionsRef={actionsRef} detent={detent}>
@@ -235,12 +108,7 @@ export function CockpitShell({ children }: { children: ReactNode }) {
             />
           </View>
         ) : null}
-        <MenuSheet
-          paper={color.paper}
-          onDetent={setDetent}
-          cover={showCover ? <CreationBody /> : null}
-          onCoverDismiss={dismissCreation}
-        >
+        <MenuSheet paper={color.paper} onDetent={setDetent}>
           <CockpitBody />
         </MenuSheet>
       </View>

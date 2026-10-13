@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Image, Platform, StyleSheet, Text, View } from 'react-native';
 
@@ -15,13 +15,14 @@ import {
   uploadSellPhotoFile,
 } from '@/api/endpoints';
 import type { SellItemView, SellStep } from '@/api/types';
-import { useCreationBody } from '@/components/cockpit-context';
-import { ChoiceBlock, DropSurface, JourneyContinue, SellJourney, sellIcon, useLeaveSell } from '@/components/sell-flow';
+import { ChoiceBlock, DropSurface, JourneyContinue, SellJourney, sellIcon } from '@/components/sell-flow';
 import { Icon } from '@/components/icon';
 import { Button, Field, InlineError, MoneyField, T } from '@/components/ui';
 import { font, space, weight } from '@/design/tokens';
+import { confirmAction } from '@/lib/confirm';
 import { errorMessage } from '@/lib/errors';
 import { formatAmount, majorToMinor, minorToMajorInput } from '@/lib/money';
+import { navigation } from '@/lib/navigation';
 import { copyText, listingDraft, openShot, parseEstimate, shotAfter } from '@/lib/sell';
 import { forgetSellItem, rememberSellItem, startSellWrite } from '@/lib/sell-cache';
 import { useRefreshProduct } from '@/state/query';
@@ -32,8 +33,7 @@ const ORDER: SellStep[] = ['identity', 'photos', 'details', 'research', 'estimat
 export default function SellSetupScreen() {
   const params = useLocalSearchParams<{ id: string }>();
   const id = Number(params.id);
-  const router = useRouter();
-  const leave = useLeaveSell();
+  const leave = () => navigation.closeExperience();
   const refresh = useRefreshProduct();
   const client = useQueryClient();
   const { color, typeColor } = useTheme();
@@ -61,7 +61,11 @@ export default function SellSetupScreen() {
   const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Save & exit could not save. The next X asks before leaving without those changes.
+  const [exitFailed, setExitFailed] = useState(false);
   const finishing = useRef(false);
+  // The step the server last reported. Only a change to it moves the user forward.
+  const serverStep = useRef<SellStep | null>(null);
   const uploadSerial = useRef(0);
   const activeShot = useRef<string | null>(null);
   activeShot.current = shot;
@@ -76,13 +80,12 @@ export default function SellSetupScreen() {
     Image.prefetch(mediaUrl(coverUrl)).catch(() => {});
   }, [coverUrl]);
 
-  useEffect(() => {
-    if (!item || item.id !== id || item.setup_done || placedId === id) {
-      return;
-    }
-
+  // Placed while rendering, not in an effect: Category replaces itself with this
+  // screen, and an empty first commit would flash blank paper in the modal.
+  if (item && item.id === id && !item.setup_done && placedId !== id) {
     const nextShot = openShot(item.photo_plan);
     anchor.current = { id, step: item.setup_step, shot: nextShot };
+    serverStep.current = item.setup_step;
     setPlacedId(id);
     setStep(item.setup_step);
     setShot(nextShot);
@@ -96,7 +99,7 @@ export default function SellSetupScreen() {
     const draft = listingDraft(item);
     setListingTitle(draft.title);
     setListingDescription(draft.description);
-  }, [id, item, placedId]);
+  }
 
   useEffect(() => {
     if (!item || item.id !== id || !itemQuery.isFetchedAfterMount) {
@@ -105,8 +108,16 @@ export default function SellSetupScreen() {
 
     if (item.setup_done) {
       if (!finishing.current) {
-        router.replace(`/product/${item.id}`);
+        navigation.closeExperience();
       }
+      return;
+    }
+
+    // A refetch that repeats the server's step must not undo a local Back.
+    const serverMoved = serverStep.current !== item.setup_step;
+    serverStep.current = item.setup_step;
+
+    if (!serverMoved) {
       return;
     }
 
@@ -125,7 +136,7 @@ export default function SellSetupScreen() {
     anchor.current = { id, step: item.setup_step, shot: nextShot };
     setStep(item.setup_step);
     setShot(nextShot);
-  }, [id, item, itemQuery.isFetchedAfterMount, router, step]);
+  }, [id, item, itemQuery.isFetchedAfterMount, step]);
 
   async function kept(work: () => Promise<{ data: SellItemView }>) {
     const token = startSellWrite(id);
@@ -135,14 +146,17 @@ export default function SellSetupScreen() {
     return { item: next.data, token };
   }
 
-  async function run(work: () => Promise<void>) {
+  async function run(work: () => Promise<void>): Promise<boolean> {
     setBusy(true);
     setError(null);
+    setExitFailed(false);
 
     try {
       await work();
+      return true;
     } catch (caught) {
       setError(errorMessage(caught));
+      return false;
     } finally {
       setBusy(false);
     }
@@ -150,10 +164,20 @@ export default function SellSetupScreen() {
 
   const opened = item != null && item.id === id && placedId === id && step != null;
   const missing = itemQuery.isError && !item;
-  // Null keeps the previous creation screen up while this draft loads.
-  useCreationBody(!opened && missing ? <InlineError message={errorMessage(itemQuery.error)} /> : null);
 
   if (!opened || !item || !step) {
+    if (missing) {
+      return (
+        <SellJourney step="identity" title="This draft did not open" onExit={leave}>
+          <InlineError message={errorMessage(itemQuery.error)} />
+        </SellJourney>
+      );
+    }
+
+    if (item?.setup_done && !finishing.current) {
+      return <SellJourney step="description" title="This item is already set up" onExit={leave}>{null}</SellJourney>;
+    }
+
     return null;
   }
 
@@ -167,12 +191,12 @@ export default function SellSetupScreen() {
   const shotPhoto = currentShot ? item.photos.find((photo) => photo.shot_key === currentShot.key) ?? null : null;
   const shotPreview = currentShot && localShot?.key === currentShot.key ? localShot.uri : (shotPhoto ? mediaUrl(shotPhoto.url) : null);
 
-  async function saveIdentity(advance: boolean) {
+  async function saveIdentity(advance: boolean): Promise<boolean> {
     const trimmed = name.trim();
 
     if (advance && trimmed === '') {
       setError('Name the item first.');
-      return;
+      return false;
     }
 
     const detailPatch: Record<string, string> = {};
@@ -183,7 +207,7 @@ export default function SellSetupScreen() {
       }
     }
 
-    await run(async () => {
+    return run(async () => {
       await kept(() => updateSellItem(id, {
         name: trimmed,
         brand: brand.trim() || null,
@@ -197,8 +221,8 @@ export default function SellSetupScreen() {
     });
   }
 
-  async function saveDetails(advance: boolean) {
-    await run(async () => {
+  async function saveDetails(advance: boolean): Promise<boolean> {
+    return run(async () => {
       await kept(() => updateSellItem(id, { condition, details, advance }));
 
       if (advance) {
@@ -219,12 +243,12 @@ export default function SellSetupScreen() {
     });
   }
 
-  async function saveEstimate(advance: boolean) {
+  async function saveEstimate(advance: boolean): Promise<boolean> {
     const parsed = parseEstimate(low, high, unknown);
 
     if ('error' in parsed) {
       setError(parsed.error);
-      return;
+      return false;
     }
 
     const value = parsed.unknown
@@ -272,10 +296,10 @@ export default function SellSetupScreen() {
         listing_title: title || null,
         listing_description: description || null,
       }));
-      await refresh();
-      await rememberSellItem(client, saved.item, saved.token);
       savedOk = true;
-      leave();
+      // The board already has the saved item. The rest of the product data refreshes behind the close.
+      void refresh().then(() => rememberSellItem(client, saved.item, saved.token));
+      navigation.finishCreation('Ready to list');
     });
 
     return savedOk;
@@ -361,7 +385,7 @@ export default function SellSetupScreen() {
     }
 
     const preferred = ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible;
-    // A full-screen camera presented by the creation sheet dismisses that sheet,
+    // A full-screen camera presented by the creation modal dismisses that modal,
     // and the cockpit sheet under it, when the camera closes.
     const presentationStyle = ImagePicker.UIImagePickerPresentationStyle.OVER_FULL_SCREEN;
     const result = source === 'camera'
@@ -446,7 +470,25 @@ export default function SellSetupScreen() {
     setShot(previousShot);
   }
 
+  function leaveIfSaved(saved: boolean) {
+    if (saved) {
+      leave();
+      return;
+    }
+
+    setExitFailed(true);
+  }
+
   function exit() {
+    if (exitFailed) {
+      void confirmAction("Couldn't save this step", 'Your draft keeps what was saved before.', { cancel: 'Keep editing', confirm: 'Leave without these changes' }).then((sure) => {
+        if (sure) {
+          leave();
+        }
+      });
+      return;
+    }
+
     if (step === 'identity') {
       const untouched = (record.name == null || record.name.trim() === '') && record.photos.length === 0 && name.trim() === '';
 
@@ -454,35 +496,26 @@ export default function SellSetupScreen() {
         void run(async () => {
           await discardSellItem(id);
           forgetSellItem(client, id);
-          leave();
-        });
+        }).then(leaveIfSaved);
         return;
       }
 
-      void saveIdentity(false).then(() => leave());
+      void saveIdentity(false).then(leaveIfSaved);
       return;
     }
 
     if (step === 'details') {
-      void saveDetails(false).then(() => leave());
+      void saveDetails(false).then(leaveIfSaved);
       return;
     }
 
     if (step === 'estimate') {
-      void saveEstimate(false).then((saved) => {
-        if (saved) {
-          leave();
-        }
-      });
+      void saveEstimate(false).then(leaveIfSaved);
       return;
     }
 
     if (step === 'description') {
-      void saveDescription(false).then((saved) => {
-        if (saved) {
-          leave();
-        }
-      });
+      void saveDescription(false).then(leaveIfSaved);
       return;
     }
 

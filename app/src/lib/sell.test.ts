@@ -34,7 +34,7 @@ test('a skipped photo does not reopen, and the listing draft does not rename the
 });
 
 test('guided photos do not reuse another shot, and estimate does not ask for confidence', () => {
-  const setup = readFileSync(new URL('../app/(app)/(tabs)/sell/setup/[id].tsx', import.meta.url), 'utf8');
+  const setup = readFileSync(new URL('../app/(app)/create/sell/setup/[id].tsx', import.meta.url), 'utf8');
 
   assert.equal(setup.includes('opacity: 0.35'), false);
   assert.equal(setup.includes('Pretty sure'), false);
@@ -75,8 +75,26 @@ test('background removal stays on the editor, and the sheet helper is not an exp
   assert.equal(background.includes('./background-sheet'), false);
 });
 
+test('Find something opens Money Hunt at the top of the Sell sheet, and a found item hands off to the creation modal', () => {
+  const sell = readFileSync(new URL('../app/(app)/(tabs)/sell/index.tsx', import.meta.url), 'utf8');
+  const discover = readFileSync(new URL('../app/(app)/discover.tsx', import.meta.url), 'utf8');
+  const below = sell.slice(sell.indexOf('below={'));
+  const hunt = discover.slice(discover.indexOf('export function MoneyHunt'), discover.indexOf('return (', discover.indexOf('export function MoneyHunt')));
+
+  // On iOS phone the resting cockpit sheet shows only its top. Below the board, the hunt opened off-screen.
+  assert.ok(below.indexOf('<MoneyHunt') >= 0);
+  assert.ok(below.indexOf('<MoneyHunt') < below.indexOf('<SellBoard'));
+  assert.equal(sell.includes("label: 'Find something'"), true);
+  assert.equal(sell.includes('setHunt(!hunt)'), true);
+
+  assert.equal(hunt.includes("navigation.resumeCreation('sell', created.data.id)"), true);
+  assert.equal(hunt.includes('router.push'), false);
+  // The hunt stays mounted under the modal. A stuck busy Start would greet the user when creation closes.
+  assert.ok(hunt.indexOf('setBusy(false)', hunt.indexOf('navigation.resumeCreation')) > 0);
+});
+
 test('starting a sale does not offer another cockpit', () => {
-  const source = readFileSync(new URL('../app/(app)/(tabs)/sell/new.tsx', import.meta.url), 'utf8');
+  const source = readFileSync(new URL('../app/(app)/create/sell/new.tsx', import.meta.url), 'utf8');
 
   assert.equal(source.includes('Freelance'), false);
   assert.equal(source.includes('Recover'), false);

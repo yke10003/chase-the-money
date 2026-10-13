@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 
 import { Icon } from '@/components/icon';
@@ -23,21 +24,22 @@ export function useFeedback() {
   return useContext(FeedbackContext);
 }
 
-export function FeedbackProvider({ children }: { children: ReactNode }) {
+export function FeedbackProvider({ children, placement = 'bottom' }: { children: ReactNode; placement?: 'top' | 'bottom' }) {
   const [moment, setMoment] = useState<(Moment & { key: number }) | null>(null);
   const show = useCallback((next: Moment) => setMoment({ ...next, key: Date.now() }), []);
 
   return (
     <FeedbackContext.Provider value={show}>
       {children}
-      {moment ? <MomentCard key={moment.key} moment={moment} onDone={() => setMoment(null)} /> : null}
+      {moment ? <MomentCard key={moment.key} moment={moment} placement={placement} onDone={() => setMoment(null)} /> : null}
     </FeedbackContext.Provider>
   );
 }
 
-function MomentCard({ moment, onDone }: { moment: Moment; onDone: () => void }) {
+function MomentCard({ moment, placement, onDone }: { moment: Moment; placement: 'top' | 'bottom'; onDone: () => void }) {
   const { color, type: typeScale } = useTheme();
   const styles = useMemo(() => createStyles(color), [color]);
+  const insets = useSafeAreaInsets();
   const reduce = useReduceMotion();
   const enter = useRef(new Animated.Value(reduce ? 1 : 0)).current;
   const router = useRouter();
@@ -59,10 +61,12 @@ function MomentCard({ moment, onDone }: { moment: Moment; onDone: () => void }) 
     return () => clearTimeout(timer);
   }, [enter, moment.banked, onDone, reduce]);
 
-  const translateY = enter.interpolate({ inputRange: [0, 1], outputRange: [28, 0] });
+  const top = placement === 'top';
+  const translateY = enter.interpolate({ inputRange: [0, 1], outputRange: [top ? -28 : 28, 0] });
+  const anchor = top ? { top: insets.top + space.sm } : { bottom: space.xl };
 
   return (
-    <Animated.View pointerEvents="box-none" style={[styles.host, { opacity: enter, transform: [{ translateY }] }]}>
+    <Animated.View pointerEvents="box-none" style={[styles.host, anchor, { opacity: enter, transform: [{ translateY }] }]}>
       <Pressable accessibilityRole="alert" onPress={onDone} style={styles.card}>
         {moment.banked ? (
           <View style={{ gap: 2 }}>
@@ -107,7 +111,7 @@ function MomentCard({ moment, onDone }: { moment: Moment; onDone: () => void }) 
 
 function createStyles(color: Palette) {
   return StyleSheet.create({
-  host: { position: 'absolute', right: space.md, bottom: space.xl, left: space.md, alignItems: 'center', zIndex: 50 },
+  host: { position: 'absolute', right: space.md, left: space.md, alignItems: 'center', zIndex: 50 },
   card: {
     width: '100%',
     maxWidth: 420,

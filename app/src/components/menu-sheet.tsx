@@ -6,35 +6,28 @@ import { SHEET_RESTING_DETENT } from '@/lib/cockpit-scene';
 import { navLog, screenLifecycleLog } from '@/lib/nav-log';
 
 const cockpitLog = __DEV__ ? screenLifecycleLog('cockpit') : {};
-const coverLog = __DEV__ ? screenLifecycleLog('sell-create') : {};
 const stackFinished = __DEV__ ? () => navLog('native.menusheet.finishTransitioning') : undefined;
 
 /**
  * One form sheet for the whole cockpit. Detent 1 is UIKit's maximum, already
  * under the island. The screen id is what the native tab-bar lift follows.
- * Every other modal, including Sell creation, is ignored.
+ * Every other modal is ignored.
  *
  * The sheet content must be the screen's own child. react-native-screens only
  * connects a scroll view it finds as a direct subview, and that connection is
  * what lets a drag expand the sheet before the list scrolls.
  *
- * Sell creation is the next screen in this stack, presented full screen so the
- * keyboard cannot shrink a form sheet and reveal Sell. The cockpit sheet stays
- * mounted underneath. A second stack would hide it instead.
+ * Nothing else is presented from this stack. Product Detail, the secondary
+ * pages and Sell creation are (app) stack modals above it.
  */
 export function MenuSheet({
   children,
   paper,
   onDetent,
-  cover,
-  onCoverDismiss,
 }: {
   children: ReactNode;
   paper: string;
   onDetent: (index: number) => void;
-  /** Full-screen sheet presented above the cockpit. Null keeps it dismissed. */
-  cover?: ReactNode;
-  onCoverDismiss?: () => void;
 }) {
   return (
     <ScreenStack style={StyleSheet.absoluteFill} pointerEvents="box-none" onFinishTransitioning={stackFinished}>
@@ -61,19 +54,6 @@ export function MenuSheet({
       >
         {children}
       </Screen>
-      {cover ? (
-        <Screen
-          activityState={2}
-          stackPresentation="fullScreenModal"
-          screenId="sell-create"
-          gestureEnabled
-          {...coverLog}
-          onDismissed={onCoverDismiss}
-          style={{ flex: 1, backgroundColor: paper }}
-        >
-          {cover}
-        </Screen>
-      ) : null}
     </ScreenStack>
   );
 }

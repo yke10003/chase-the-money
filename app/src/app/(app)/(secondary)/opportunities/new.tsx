@@ -1,29 +1,24 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Platform, View } from 'react-native';
+import { View } from 'react-native';
 
 import { createOpportunity, startPlaybook } from '@/api/endpoints';
 import type { OpportunityType } from '@/api/types';
 import { FormError, readMoney, usePlaybookStart } from '@/components/create-flow';
 import { Button, Field, MoneyField, PageHeader, Segmented, T } from '@/components/ui';
-import { useLayout } from '@/design/layout';
 import { space } from '@/design/tokens';
+import { navigation } from '@/lib/navigation';
 import { useRefreshProduct } from '@/state/query';
 import { useTheme } from '@/state/theme';
 
 export default function CustomMissionScreen() {
-  const params = useLocalSearchParams<{ mode?: string; start?: string }>();
+  const params = useLocalSearchParams<{ mode?: string }>();
   const router = useRouter();
-  const phone = useLayout().phone;
-  const cockpit = Platform.OS === 'ios' && phone;
 
   useEffect(() => {
     if (params.mode === 'sell') {
-      const sellNew = params.start ? `/sell/new?start=${params.start}` : '/sell/new';
-      // On iOS phone Sell creation is presented by the cockpit's own native stack.
-      // Opening it while this modal dismisses races two stacks (navigation.md, E9),
-      // so the old link lands on the Sell board until creation moves to the (app) stack.
-      router.dismissTo(cockpit ? '/sell' : sellNew);
+      // Closes this page, waits for the dismiss to finish, then presents Sell creation.
+      navigation.startCreation('sell');
     } else if (params.mode === 'freelance') {
       router.dismissTo('/freelance/new');
     } else if (params.mode === 'recover') {
@@ -31,7 +26,7 @@ export default function CustomMissionScreen() {
     } else if (params.mode === 'build') {
       router.dismissTo('/build/new');
     }
-  }, [cockpit, params.mode, params.start, router]);
+  }, [params.mode, router]);
 
   if (params.mode === 'sell' || params.mode === 'freelance' || params.mode === 'recover' || params.mode === 'build') {
     return null;

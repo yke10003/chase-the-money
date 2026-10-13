@@ -20,6 +20,7 @@ import { askingMinor, areaOf } from '@/lib/areas';
 import { errorMessage } from '@/lib/errors';
 import { formatAmount, formatAmountRange } from '@/lib/money';
 import { navRequest } from '@/lib/nav-log';
+import { navigation } from '@/lib/navigation';
 import { missionGroup } from '@/lib/mission';
 
 export default function SellScreen() {
@@ -77,13 +78,22 @@ export default function SellScreen() {
             ]}
             series={progress.data?.data.series}
             actions={[
-              { label: 'Sell something', icon: 'plus', onPress: () => router.push('/sell/new') },
-              { label: 'Find something', icon: 'search', onPress: () => setHunt((value) => !value) },
+              { label: 'Sell something', icon: 'plus', onPress: () => navigation.startCreation('sell') },
+              {
+                label: 'Find something',
+                icon: 'search',
+                onPress: () => {
+                  navRequest('sell.hunt.toggle', { open: !hunt, loaded: discover.data != null });
+                  setHunt(!hunt);
+                },
+              },
             ]}
           />
         }
         below={
           <View style={{ gap: space.lg }}>
+            {/* First, so it opens where the resting cockpit sheet shows its top, not below the board. */}
+            {hunt ? (discover.data ? <MoneyHunt categories={discover.data.data.money_hunt_categories} /> : <LoadingState label="Loading the hunt" />) : null}
             {listFailed ? <ErrorState message={errorMessage(list.error)} onRetry={() => list.refetch()} /> : null}
             {offers.length > 0 ? <T variant="bodyStrong">{offers.length === 1 ? '1 offer to answer' : `${offers.length} offers to answer`}</T> : null}
             <SellBoard
@@ -97,9 +107,8 @@ export default function SellScreen() {
                 <T variant="body" color={color.ink2}>Nothing for sale yet.</T>
               )}
             />
-            <ActionRow title="Already listed" detail="It’s on a marketplace. Track it here." icon="link" iconColor={paint.from} onPress={() => router.push('/sell/listed')} />
+            <ActionRow title="Already listed" detail="It’s on a marketplace. Track it here." icon="link" iconColor={paint.from} onPress={() => navigation.startCreation('sell-listed')} />
             <LinkButton label="Marketplaces aren’t connected" tint={color.ink3} onPress={() => setMarkets(true)} />
-            {hunt ? (discover.data ? <MoneyHunt categories={discover.data.data.money_hunt_categories} /> : <LoadingState label="Loading the hunt" />) : null}
           </View>
         }
       />
