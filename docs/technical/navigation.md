@@ -712,7 +712,7 @@ Screens that only navigate inside their own stack (a step, a child editor push, 
 
 ## 10. Native lifecycle signals and experiments
 
-E9, E2 and E6 have run (see [10.1](#101-observed-results)). The others are pending. **Do not treat `onFinishTransitioning` or any other signal as proven until E2 records an observed pass.**
+E9, E2, E6, E1 and E3 have run (see [10.1](#101-observed-results)). The others are pending. **Do not treat `onFinishTransitioning` or any other signal as proven until E2 records an observed pass.**
 
 Candidate settle signals:
 
@@ -725,9 +725,9 @@ Experiments run on a throwaway branch and are never merged. Run them on the iPho
 
 | Id | Question | Prediction | Pass criteria | Observed |
 | --- | --- | --- | --- | --- |
-| E1 | Can Sell creation be an `(app)` `fullScreenModal` route over the cockpit? | Yes, as Product Detail is | Cockpit stays presented underneath. Tab bar is restored under the modal and lifted again after dismissal. Keyboard does not reveal Sell. Picker open and close does not dismiss creation or the cockpit. Category to Identity does not flash. | Not run |
+| E1 | Can Sell creation be an `(app)` `fullScreenModal` route over the cockpit? | Yes, as Product Detail is | Cockpit stays presented underneath. Tab bar is restored under the modal and lifted again after dismissal. Keyboard does not reveal Sell. Picker open and close does not dismiss creation or the cockpit. Category to Identity does not flash. | Run 2026-10-13. **Pass.** Full height over the cockpit and tab bar, one shell mount, in-session replace without a native event, keyboard shows nothing behind, picker open and cancel, and clean exits (4 of 4). Back inside setup snaps forward to the saved step. That is setup logic, not navigation. See [10.1](#101-observed-results). |
 | E2 | Which signal fires exactly once after a dismissal has finished? | `onFinishTransitioning` on `(app)` | Fires once, after the animation, for `back()`, `dismissTo` and swipe where allowed. Never early. Also fires for an interrupted or cancelled swipe. | Run 2026-10-13. **Pass, with conditions.** After the animation for `back()` (5 of 5). Early, with no dismissal, when another stack presents at the same time. Swipe not applicable (E6). Interrupted not reproducible by hand. See [10.1](#101-observed-results). |
-| E3 | Does `replace` from one modal to another in the `(app)` stack present the new modal? | No (blank or flash) | New modal visible and the old one gone, with no flash | Not run |
+| E3 | Does `replace` from one modal to another in the `(app)` stack present the new modal? | No (blank or flash) | New modal visible and the old one gone, with no flash | Run 2026-10-13. **Approach A (`replace`): Fail, worse than predicted.** The old modal is dismissed and the new one is never presented. It is presented late on the next modal change, and a later exit orphans a controller. **Approach B (`back()`, wait for `onFinishTransitioning`, `push`): Pass** in 1 of 1 cycles, with the cockpit visible between the two animations. Repeats and double-tap not run. See [10.1](#101-observed-results). |
 | E4 | Does re-tapping the focused native tab emit `tabPress`? | Unknown | Event observed in JavaScript | Not run |
 | E5 | Can the cockpit be returned to the resting detent from JavaScript (for example, setting `sheetAllowedDetents` to `[0.61]` and back)? | Possibly | Sheet animates to 0.61, drag still works, lift intact. If not, a native method is needed and requires approval. | Not run |
 | E6 | Does `gestureEnabled` do anything on a `fullScreenModal`? | No | Documented either way | Run 2026-10-13. **Pass.** No. A swipe scrolls the content. |
@@ -854,9 +854,134 @@ Creation opened at the saved step. The cockpit stayed "disappeared" from Product
 - **Observed:** the swipe scrolls the content (overscroll), and Product Detail does not move or dismiss. No `gestureCancel` or other native event.
 - **Status:** **Pass** (documented). The prediction "No" holds. Close buttons are the only way to dismiss a top-level `fullScreenModal`.
 
+#### E1 — root-owned creation
+
+- **Date:** 2026-10-13, same device and build. Throwaway branch `exp/nav-stage1`.
+- **Setup:**
+  - `(app)/exp` is declared as a `fullScreenModal`, with its own `Stack` (`new`, then `setup/[id]`). `setup/[id]` re-exports the real Sell setup screen.
+  - `/exp/` was added to `keepsNativeTabs`, as Product Detail is, so the shell does not remount.
+  - Entry is a dev-only row on the Sell board that opens draft 17 (saved step: photos).
+- **Scenario:**
+  - Open, Continue (an in-session `replace`), Back inside setup, camera and library open and cancel, Save & exit.
+  - Then twice more, once closing from the first screen.
+  - Then Home and back to Sell.
+- **Status:**
+  - **Presentation: Pass.**
+  - **Keyboard: Pass** (second run, after relaunch). The Back problem below blocked Identity, so a text field on the first screen was used instead. Focus, typing and dismissal showed no Sell, cockpit or tab bar, and logged no route or native event. Closing logged the usual `cockpit.didAppear` and `finishTransitioning` 508 ms after `GO_BACK`.
+  - **Back inside setup: Fail, not navigation.**
+
+```text
+[nav +07835ms] route.action type=PUSH to=exp/new
+[nav +07922ms] native.cockpit.willDisappear
+[nav +07922ms] native.app.willAppear route=exp key=tTa
+[nav +08438ms] native.app.didAppear route=exp key=tTa
+[nav +08439ms] native.app.finishTransitioning
+[nav +13264ms] route.action type=REPLACE to=setup/[id] id=17   ← no native event, no flash seen
+…
+[nav +298761ms] route.action type=POP_TO to=(tabs)/sell/index  ← Save & exit
+[nav +298909ms] native.cockpit.willAppear
+[nav +299424ms] native.cockpit.didAppear
+[nav +299424ms] native.app.finishTransitioning
+```
+
+- Creation covers the cockpit and the tab bar at full height. Compare the `MenuSheet` cover, which is clipped to the top third (E9).
+- `cockpit.mount` stayed at 1. No `app.wrapper` change. No duplicate `(tabs)` warning.
+- Each of the three exits (`dismissTo` twice, `back()` once) ended with `cockpit.didAppear` and then `finishTransitioning` in the same millisecond, about 515 ms later. That is the E2 pattern.
+- **Back snaps forward.** Back from the first photo shows Identity for one frame, then the photo step again. No route action is logged. In `sell/setup/[id].tsx` the effect that follows server step changes (the `anchor` effect after the placement effect) sees `item.setup_step` (`photos`) differ from the anchor that `back()` just set (`identity`), and calls `setStep(item.setup_step)`. That component is unchanged from `main` and is the same one the cover renders. So this is a pre-existing Sell logic bug, not caused by the route. This is derived from the code; a control run on the cover is pending.
+- **Experiment artifacts that matter for Stage 3:**
+  - Outside a Sell path, `SellJourney` renders in place *and* publishes the same body into the hidden cockpit (`useCockpitBody(phoneBody, !creation && …)`). Its footer also reserves 64 pt for a tab bar.
+  - `CockpitShell` takes the hero from `cockpitArea(pathname)`, so the hero is removed under any non-tab route. That is invisible while the modal covers it, but visible when route state and native presentation disagree (E3).
+
+#### E3 — modal to modal (Product Detail to creation)
+
+- **Date:** 2026-10-13, same build. Dev-only buttons on Product Detail for draft 17.
+- **Approach A: `router.replace('/exp/setup/17')`. Fail.**
+- **Approach B: `back()`, wait for `onFinishTransitioning`, then `push`. Pass** (one cycle, after relaunch; see below).
+
+**Run 1: the new modal is never presented.** Product Detail is dismissed and creation does not appear. Waiting 17 s changed nothing.
+
+```text
+[nav +404224ms] route.action type=REPLACE to=exp/setup/[id] id=17
+[nav +404281ms] route.state app=(tabs)>exp:17 tab=sell
+[nav +404335ms] native.cockpit.willAppear         ← Product Detail dismissing
+[nav +404842ms] native.cockpit.didAppear
+[nav +404842ms] native.app.finishTransitioning    ← no native.app.willAppear route=exp
+```
+
+The mechanism comes from `setModalViewControllers` in `RNSScreenStack.mm`:
+
+1. `(app)` modals are presented from the cockpit sheet, the topmost controller, which this stack does not own.
+2. For the swap, `changeRootController` falls through to the topmost branch and becomes Product Detail. The stack calls `[productDetail dismissViewControllerAnimated:YES completion:finish]`.
+3. In `finish`, Product Detail is no longer attached, so the stack runs `afterTransitions` and returns. Nothing is presented, and nothing retries.
+
+The source comment there points to upstream issue 1813. `onFinishTransitioning` fires anyway.
+
+**Effects of the phantom route.** Route state says `exp` is on top, but nothing is presented natively. `/sell` is blurred, and `pathname` is `/exp/setup/17`, so `CockpitShell` drew no hero. After the cockpit was collapsed, the area above it was white.
+
+**Run 2: the stuck modal is presented late.** Opening Product Detail again presents the stuck `exp` without animation in the same frame, then Product Detail on top. Creation was seen flashing under Product Detail as it opened.
+
+```text
+[nav +433638ms] route.action type=PUSH to=product/[id]/index id=17
+[nav +433788ms] native.app.willAppear route=exp key=GyNB2
+[nav +433788ms] native.app.didAppear route=exp key=GyNB2
+[nav +433788ms] native.app.willAppear route=product/[id] key=7gCUp
+[nav +434293ms] native.app.didAppear route=product/[id] key=7gCUp
+```
+
+**Run 3: the replace works, and there are now two creation screens.** This time the change root is the stuck `exp`, which this stack owns. The normal path runs: Product Detail is dismissed, revealing creation copy 1, then copy 2 is presented over it. This was seen as creation appearing under Product Detail and then duplicating.
+
+```text
+[nav +436479ms] route.action type=REPLACE to=exp/setup/[id] id=17
+[nav +436542ms] route.state app=(tabs)>exp:17>exp:17
+[nav +436595ms] native.app.willAppear route=exp key=GyNB2
+[nav +437100ms] native.app.didAppear route=exp key=GyNB2
+[nav +437138ms] native.app.willAppear route=exp key=yktEC
+[nav +437642ms] native.app.didAppear route=exp key=yktEC
+```
+
+**Exit: a controller is orphaned.** Save & exit (`dismissTo('/sell')`) removes both routes. The topmost branch calls `dismiss` on the top copy only. The lower copy stays presented with its React tree removed. Unlike every clean exit, there is no `native.cockpit.willAppear` or `didAppear`. The screen showed the hero and tab bar with a blank cockpit. The orphan is inferred from the log and the code; what it draws was not established.
+
+```text
+[nav +440790ms] route.action type=POP_TO to=(tabs)/sell/index
+[nav +440868ms] route.state app=(tabs) tab=sell sell=index
+[nav +441428ms] native.app.finishTransitioning    ← no native.cockpit.*
+```
+
+**Approach B, after a relaunch.** Product Detail is fully dismissed (`cockpit.didAppear`) before the push. Creation is presented once at the saved step, and Save & exit brings the cockpit back with its content.
+
+```text
+[nav +08872ms] e3b.request href=/exp/setup/17
+[nav +08882ms] route.action type=GO_BACK
+[nav +09009ms] native.cockpit.willAppear
+[nav +09512ms] native.cockpit.didAppear
+[nav +09512ms] native.app.finishTransitioning
+[nav +09512ms] e3b.push href=/exp/setup/17
+[nav +09515ms] route.action type=PUSH to=exp/setup/[id] id=17
+[nav +09598ms] native.app.willAppear route=exp key=Czrhl
+[nav +10119ms] native.app.didAppear route=exp key=Czrhl
+[nav +10120ms] native.app.finishTransitioning
+…
+[nav +25845ms] route.action type=POP_TO to=(tabs)/sell/index   ← Save & exit
+[nav +25981ms] native.cockpit.willAppear
+[nav +26482ms] native.cockpit.didAppear
+[nav +26482ms] native.app.finishTransitioning
+```
+
+- From tap to settled creation took about 1.25 s: 630 ms to dismiss, an 86 ms gap, then 520 ms to present. The Sell cockpit is visible while Product Detail slides down and while creation slides up. That is inherent to closing and then opening. A `replace` cannot avoid it (approach A).
+- Possible later polish: dismiss Product Detail without animation so only the creation slide shows. Not tested.
+- Each step changes one modal, so every update takes the owned path in `setModalViewControllers`.
+- Not run: three repeats, and a double-tap. The experiment dropped a second request while one was pending (`e3b.ignored`), but that was not exercised. Journeys B (20 repeats) and M (double-tap) cover both in Stage 3.
+
+**Implication.**
+
+- While the cockpit sheet is presented, the `(app)` stack is only reliable when each update adds or removes **one** modal at the top. A swap (`replace`), or removing two modals in one update (`dismissTo` across two), loses or orphans a controller.
+- That rules out `replace` between top-level experiences, even with the `(app)` stack as the only owner. T1 must close, wait for the signal, then present.
+- Any UI driven by `pathname` follows route state even when the native side never presented the route.
+
 #### Other observations from these runs
 
 - **Profile remounts the shell twice (problem 3, I1).** Opening Profile logs `cockpit.unmount`, `cockpit.mount count=2` and `app.wrapper wrapper=AppShell`. The whole `(app)` stack remounts, including the `settings` screen itself (`route.removed` then `route.focus`). Going back logs `cockpit.mount count=3`. The Profile page showed an empty full screen with only an old "Back" label. Not investigated in Stage 1.
+- **Production cover, same session as E1 (second run).** Sell something logs a normal native sequence: `cover.commit show=true`, `native.cockpit.willDisappear`, `native.sell-create.willAppear`, then `didAppear` 519 ms later. Category still rendered in the top third, over the hero and a blank cockpit. So the presentation lifecycle is correct and the fault is in the cover's layout or rendering. The same build drew E1 full height, so the fault is specific to the `MenuSheet` cover, not to `fullScreenModal`. Not root-caused. Stage 3 deletes the cover when E1 passes.
 - **Duplicate Sell routes.** After the cover was lost in E9 run 1, every Sell something tap pushed another `new` (`sell=index>setup/[id]:17>new>new>…`). This is I9 behaviour in the current code.
 
 ## 11. Roadmap
