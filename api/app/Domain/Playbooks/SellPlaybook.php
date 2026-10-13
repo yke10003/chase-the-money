@@ -11,6 +11,7 @@ use App\Models\Opportunity;
 use App\Models\OpportunityAction;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 
 final class SellPlaybook
@@ -127,7 +128,7 @@ final class SellPlaybook
     {
         match ($action->playbook_key) {
             'value_item' => $this->afterValue($opportunity, $input),
-            'prepare_item' => $this->afterPrepare($opportunity),
+            'prepare_item' => $this->afterPrepare($opportunity, $input),
             'list_item' => $this->afterList($opportunity, $input),
             'got_paid' => $this->receive($opportunity, $input),
             default => null,
@@ -193,12 +194,26 @@ final class SellPlaybook
         $this->addPrepare($opportunity);
     }
 
-    private function afterPrepare(Opportunity $opportunity): void
+    private function afterPrepare(Opportunity $opportunity, array $input): void
     {
+        $description = trim((string) ($input['listing_description'] ?? ''));
+        $item = $opportunity->sellItem;
+
+        if ($item !== null) {
+            $item->listing_description = $description === '' ? null : $description;
+            $item->save();
+        }
+
         $opportunity->stage = 'ready_to_list';
         $opportunity->status = OpportunityStatus::Active;
         $opportunity->save();
         $this->addList($opportunity);
+
+        Log::info('sell.listing.prepared', [
+            'opportunity_id' => $opportunity->id,
+            'sell_item_id' => $item?->id,
+            'bytes' => strlen($description),
+        ]);
     }
 
     private function afterList(Opportunity $opportunity, array $input): void
@@ -349,6 +364,20 @@ final class SellPlaybook
         $this->addPrepare($opportunity);
     }
 
+    public function queueList(Opportunity $opportunity): void
+    {
+        $open = $opportunity->actions()
+            ->where('playbook_key', 'list_item')
+            ->where('status', 'open')
+            ->exists();
+
+        if ($open) {
+            return;
+        }
+
+        $this->addList($opportunity);
+    }
+
     private function addPrepare(Opportunity $opportunity): void
     {
         PlaybookKit::addAction($opportunity, 'prepare_item', 'Prepare the listing', 'Write a title, a short description, and where you will list it.', 30, XpEconomy::PREPARATION);
@@ -392,6 +421,9 @@ final class SellPlaybook
             'value_item' => [
                 PlaybookKit::moneyField('worth_min_minor', 'Low estimate', true),
                 PlaybookKit::moneyField('worth_max_minor', 'High estimate, if it is a range', false),
+            ],
+            'prepare_item' => [
+                PlaybookKit::textField('listing_description', 'Description', false),
             ],
             'list_item' => [
                 PlaybookKit::textField('listed_on', 'Where did you list it?', true),

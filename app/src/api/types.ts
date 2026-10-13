@@ -263,7 +263,7 @@ export type ProgressView = {
   series: Array<{ period: string; amount_minor: number }> | null;
 };
 
-export type SellStep = 'identity' | 'photos' | 'details' | 'research' | 'estimate' | 'done';
+export type SellStep = 'identity' | 'photos' | 'details' | 'research' | 'estimate' | 'description' | 'done';
 
 export type SellField = {
   key: string;
@@ -290,6 +290,7 @@ export type SellShot = {
   guidance: string;
   icon: string;
   taken?: boolean;
+  skipped?: boolean;
 };
 
 export type SellCatalog = {
@@ -298,12 +299,19 @@ export type SellCatalog = {
   shots: Record<string, { title: string; guidance: string; icon: string }>;
 };
 
+export type CollageSlot = number | { id: number; zoom?: number };
+
 export type SellPhoto = {
   id: number;
   url: string;
+  original_url: string;
   shot_key: string | null;
   sort_order: number;
   is_cover: boolean;
+  has_edit: boolean;
+  background: string | null;
+  cutout_url: string | null;
+  collage: CollageSlot[] | { background?: string; slots?: CollageSlot[] } | null;
 };
 
 export type SellComparable = {
@@ -319,6 +327,7 @@ export type SellNextAction = {
   id: number;
   title: string;
   description: string | null;
+  playbook_key?: string | null;
   completion?: 'form' | 'simple';
   fields?: Array<{ key: string; label: string; type: string; required: boolean; prefill_minor?: number | null }>;
 };
@@ -327,6 +336,7 @@ export type SellItemView = {
   id: number;
   opportunity_id: number;
   name: string | null;
+  listing_title: string | null;
   category: string;
   category_label: string;
   subcategory: string | null;
@@ -335,6 +345,7 @@ export type SellItemView = {
   condition: string | null;
   condition_label: string | null;
   details: Record<string, string>;
+  listing_description: string | null;
   value_min_minor: number | null;
   value_max_minor: number | null;
   value_confidence: 'sure' | 'rough' | null;
@@ -352,8 +363,13 @@ export type SellItemView = {
   comparables: SellComparable[];
   photo_plan: SellShot[];
   next: SellNextAction | null;
+  outcomes?: PlaybookOutcome[];
   asking_price_minor: number | null;
   listed_on: string | null;
+  listing_url?: string | null;
+  offer_minor?: number | null;
+  agreed_amount_minor?: number | null;
+  received_minor?: number | null;
 };
 
 export type OpportunityFilters = {

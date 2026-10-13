@@ -6,7 +6,7 @@ import { Platform, Pressable, StyleSheet, Text, View, type ViewStyle } from 'rea
 import { getCatalog, getCurrentGoal, getProfile, saveProfile, updateGoal } from '@/api/endpoints';
 import type { OpportunityType, UserProfile } from '@/api/types';
 import { Icon } from '@/components/icon';
-import { Button, Chips, DateField, Divider, ErrorState, Field, InlineError, LoadingState, MoneyField, PageHeader, Panel, Segmented, T, Tag, TypeTag } from '@/components/ui';
+import { Button, Chips, DateField, Divider, ErrorState, Field, InlineError, LinkButton, LoadingState, MoneyField, PageHeader, Panel, Segmented, T, Tag, TypeTag } from '@/components/ui';
 import { useLayout } from '@/design/layout';
 import type { Palette } from '@/design/palette';
 import { font, radius, space, weight } from '@/design/tokens';
@@ -36,6 +36,7 @@ const WILLING_GROUPS: Array<{ type: OpportunityType; keys: string[] }> = [
 
 export default function SettingsScreen() {
   const { preference, setPreference } = useSettingsUi();
+  const router = useRouter();
   const params = useLocalSearchParams<{ tab?: string }>();
   const [tab, setTab] = useState<Tab>(params.tab === 'goal' || params.tab === 'account' ? params.tab : 'profile');
 
@@ -43,6 +44,7 @@ export default function SettingsScreen() {
     <View style={{ gap: space.xl, maxWidth: 880 }}>
       <PageHeader title="Profile" subtitle="Skills, goal, and account." />
       <AppearancePicker value={preference} onChange={setPreference} />
+      {__DEV__ ? <LinkButton label="Bloom preview" onPress={() => router.push('/bloom-preview')} /> : null}
       <Segmented
         value={tab}
         options={[

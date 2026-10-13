@@ -171,6 +171,20 @@ final class SellItemFlow
             $item->details = $this->details($item, $input['details']);
         }
 
+        if (array_key_exists('listing_description', $input)) {
+            $item->listing_description = $this->clean($input['listing_description']);
+        }
+
+        if (array_key_exists('listing_title', $input)) {
+            $item->listing_title = $this->clean($input['listing_title']);
+        }
+
+        if (array_key_exists('skipped_shots', $input) && is_array($input['skipped_shots'])) {
+            $item->skipped_shots = $this->skipped($item, $input['skipped_shots']);
+        }
+
+        $this->applyValue($item, $input);
+
         $item->save();
         $item->opportunity->save();
 
@@ -187,70 +201,101 @@ final class SellItemFlow
 
     public function finish(SellItem $item, array $input): SellItem
     {
-        $unknown = ($input['unknown'] ?? false) === true;
-        $min = $unknown ? null : $this->amount($input, 'value_min_minor', 'Enter what you think it is worth, or skip it.');
-        $max = $unknown ? null : ($this->amount($input, 'value_max_minor', 'Enter the top of the range.', false) ?? $min);
+        return DB::transaction(function () use ($item, $input): SellItem {
+            $locked = SellItem::query()->whereKey($item->id)->lockForUpdate()->firstOrFail();
+            $locked->setRelation('opportunity', $locked->opportunity()->lockForUpdate()->first());
 
-        if (! $unknown && $min !== null && $max !== null && $max < $min) {
-            throw ValidationException::withMessages([
-                'value_max_minor' => 'The top of the range cannot be below the bottom.',
-            ]);
-        }
+            if ($locked->setupDone()) {
+                $this->writeListing($locked, $input);
+                $locked->save();
 
-        $confidence = $input['value_confidence'] ?? null;
+                return $locked->refresh();
+            }
 
-        if ($confidence !== null && ! in_array($confidence, ['sure', 'rough'], true)) {
-            throw ValidationException::withMessages([
-                'value_confidence' => 'Pick how sure you are, or leave it blank.',
-            ]);
-        }
+            if ($locked->setup_step !== 'description') {
+                throw ValidationException::withMessages([
+                    'setup_step' => 'Finish the listing from the description step.',
+                ]);
+            }
 
-        return DB::transaction(function () use ($item, $min, $max, $confidence): SellItem {
-            $item->value_min_minor = $min;
-            $item->value_max_minor = $max;
-            $item->value_confidence = $min === null ? null : $confidence;
-            $item->setup_step = 'done';
-            $item->save();
+            if ($this->clean($locked->name) === null) {
+                throw ValidationException::withMessages([
+                    'name' => 'Name the item first.',
+                ]);
+            }
 
-            $opportunity = $item->opportunity;
-            $opportunity->title = $item->name ?? $opportunity->title;
-            $opportunity->potential_min_minor = $min;
-            $opportunity->potential_max_minor = $max;
+            $this->writeListing($locked, $input);
+            $locked->setup_step = 'done';
+            $locked->save();
+
+            $opportunity = $locked->opportunity;
+            $opportunity->title = $locked->name ?? $opportunity->title;
+            $opportunity->potential_min_minor = $locked->value_min_minor;
+            $opportunity->potential_max_minor = $locked->value_max_minor;
             $context = $opportunity->context ?? [];
             $context['sell_setup'] = 'ready';
-            $context['category'] = $item->category;
-            $context['subcategory'] = $item->subcategory;
+            $context['category'] = $locked->category;
+            $context['subcategory'] = $locked->subcategory;
             $opportunity->context = $context;
 
             if (in_array($opportunity->stage, [null, 'valuing'], true)) {
-                $opportunity->stage = 'preparing';
+                $opportunity->stage = 'ready_to_list';
                 $opportunity->status = OpportunityStatus::Active;
                 $opportunity->save();
-                $this->playbook->queuePrepare($opportunity);
+                $this->playbook->queueList($opportunity);
             } else {
                 $opportunity->status = OpportunityStatus::Active;
                 $opportunity->save();
             }
 
-            if ($min !== null) {
-                $this->awardOnce($opportunity, 'value_item', 'Figure out what it\'s worth', 'Check recent sold listings for similar items.', XpEconomy::SMALL);
-            }
-
             Log::info('sell.item.finished', [
-                'user_id' => $item->user_id,
-                'sell_item_id' => $item->id,
-                'value_min_minor' => $min,
-                'value_max_minor' => $max,
-                'unknown' => $min === null,
+                'user_id' => $locked->user_id,
+                'sell_item_id' => $locked->id,
+                'listing_title' => $locked->listing_title,
+                'has_description' => $locked->listing_description !== null,
             ]);
 
-            return $item->refresh();
+            return $locked->refresh();
         });
+    }
+
+    /**
+     * A category choice with nothing else saved. Named products and photos stay.
+     */
+    public function discardEmpty(SellItem $item): void
+    {
+        if ($item->origin !== 'setup' || $item->setupDone() || $this->clean($item->name) !== null || $item->photos()->exists()) {
+            throw ValidationException::withMessages([
+                'item' => 'This product has details worth keeping.',
+            ]);
+        }
+
+        Log::info('sell.item.discarded', [
+            'user_id' => $item->user_id,
+            'sell_item_id' => $item->id,
+            'category' => $item->category,
+        ]);
+
+        $item->opportunity->delete();
     }
 
     public function addPhoto(SellItem $item, UploadedFile $file, ?string $shotKey): SellItemPhoto
     {
-        return ($this->photos)($item, $file, $shotKey);
+        $photo = ($this->photos)($item, $file, $shotKey);
+
+        if ($shotKey !== null) {
+            $skipped = array_values(array_filter(
+                $item->skipped_shots ?? [],
+                fn (string $key): bool => $key !== $shotKey,
+            ));
+
+            if ($skipped !== ($item->skipped_shots ?? [])) {
+                $item->skipped_shots = $skipped;
+                $item->save();
+            }
+        }
+
+        return $photo;
     }
 
     public function addComparable(SellItem $item, array $input): SellComparable
@@ -312,7 +357,7 @@ final class SellItemFlow
     {
         $index = array_search($item->setup_step, SellItem::STEPS, true);
 
-        if ($index === false || $item->setup_step === 'estimate' || $item->setup_step === 'done') {
+        if ($index === false || $item->setup_step === 'description' || $item->setup_step === 'done') {
             return;
         }
 
@@ -333,6 +378,62 @@ final class SellItemFlow
             'user_id' => $item->user_id,
             'sell_item_id' => $item->id,
             'setup_step' => $item->setup_step,
+        ]);
+    }
+
+    /**
+     * A later correction of the estimate. It does not move the mission's stage.
+     *
+     * @param  array<string, mixed>  $input
+     */
+    private function applyValue(SellItem $item, array $input): void
+    {
+        $touches = array_key_exists('value_min_minor', $input)
+            || array_key_exists('value_max_minor', $input)
+            || array_key_exists('value_confidence', $input);
+
+        if (! $touches) {
+            return;
+        }
+
+        $min = array_key_exists('value_min_minor', $input) ? $input['value_min_minor'] : $item->value_min_minor;
+        $max = array_key_exists('value_max_minor', $input) ? $input['value_max_minor'] : $item->value_max_minor;
+        $min = $min === null || $min === '' ? null : (int) $min;
+        $max = $max === null || $max === '' ? null : (int) $max;
+
+        if ($min === null) {
+            $max = null;
+        } elseif ($max === null) {
+            $max = $min;
+        } elseif ($max < $min) {
+            throw ValidationException::withMessages([
+                'value_max_minor' => 'The top of the range cannot be below the bottom.',
+            ]);
+        }
+
+        $confidence = array_key_exists('value_confidence', $input) ? $input['value_confidence'] : $item->value_confidence;
+
+        if ($confidence !== null && ! in_array($confidence, ['sure', 'rough'], true)) {
+            throw ValidationException::withMessages([
+                'value_confidence' => 'Pick how sure you are, or leave it blank.',
+            ]);
+        }
+
+        $item->value_min_minor = $min;
+        $item->value_max_minor = $max;
+        $item->value_confidence = $min === null ? null : $confidence;
+        $item->opportunity->potential_min_minor = $min;
+        $item->opportunity->potential_max_minor = $max;
+
+        if ($min !== null) {
+            $this->awardOnce($item->opportunity, 'value_item', 'Figure out what it\'s worth', 'Check recent sold listings for similar items.', XpEconomy::SMALL);
+        }
+
+        Log::info('sell.item.value_updated', [
+            'user_id' => $item->user_id,
+            'sell_item_id' => $item->id,
+            'value_min_minor' => $min,
+            'value_max_minor' => $max,
         ]);
     }
 
@@ -436,6 +537,38 @@ final class SellItemFlow
         }
 
         return $host !== '' ? $host : 'Other';
+    }
+
+    /**
+     * @param  array<string, mixed>  $input
+     */
+    private function writeListing(SellItem $item, array $input): void
+    {
+        if (array_key_exists('listing_title', $input)) {
+            $item->listing_title = $this->clean($input['listing_title']);
+        }
+
+        if (array_key_exists('listing_description', $input)) {
+            $item->listing_description = $this->clean($input['listing_description']);
+        }
+    }
+
+    /**
+     * @param  array<mixed>  $keys
+     * @return list<string>
+     */
+    private function skipped(SellItem $item, array $keys): array
+    {
+        $allowed = array_column(SellCatalog::plan($item->category, $item->subcategory), 'key');
+        $shots = [];
+
+        foreach ($keys as $key) {
+            if (is_string($key) && in_array($key, $allowed, true) && ! in_array($key, $shots, true)) {
+                $shots[] = $key;
+            }
+        }
+
+        return $shots;
     }
 
     private function clean(mixed $value): ?string

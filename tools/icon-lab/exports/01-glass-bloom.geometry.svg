@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024" role="img">
+  <title>A. Glass Bloom geometry</title>
+  <desc>Editable layout geometry only. Fills are flat palette colors. The glossy material is the sibling PNG, rendered by WebGPU shaders, and is not reconstructed here.</desc>
+  <rect width="1024" height="1024" fill="#1a1222"/>
+  <ellipse cx="476.23" cy="343.73" rx="87.74" ry="245.45" fill="#ff5f8a" opacity="0.964" transform="rotate(-12.00 476.23 343.73)"/>
+  <ellipse cx="660.98" cy="425.98" rx="87.74" ry="245.45" fill="#b388ff" opacity="0.964" transform="rotate(60.00 660.98 425.98)"/>
+  <ellipse cx="639.84" cy="627.11" rx="87.74" ry="245.45" fill="#6aa4ff" opacity="0.964" transform="rotate(132.00 639.84 627.11)"/>
+  <ellipse cx="442.03" cy="669.16" rx="87.74" ry="245.45" fill="#ff7a48" opacity="0.964" transform="rotate(204.00 442.03 669.16)"/>
+  <ellipse cx="340.91" cy="494.02" rx="87.74" ry="245.45" fill="#3ad4b8" opacity="0.964" transform="rotate(276.00 340.91 494.02)"/>
+  <ellipse cx="576.37" cy="367.41" rx="87.74" ry="211.09" fill="#ff7a48" opacity="0.964" transform="rotate(24.00 576.37 367.41)"/>
+  <ellipse cx="669.40" cy="528.54" rx="87.74" ry="211.09" fill="#3ad4b8" opacity="0.964" transform="rotate(96.00 669.40 528.54)"/>
+  <ellipse cx="544.91" cy="666.81" rx="87.74" ry="211.09" fill="#ff5f8a" opacity="0.964" transform="rotate(168.00 544.91 666.81)"/>
+  <ellipse cx="374.93" cy="591.13" rx="87.74" ry="211.09" fill="#b388ff" opacity="0.964" transform="rotate(240.00 374.93 591.13)"/>
+  <ellipse cx="394.38" cy="406.10" rx="87.74" ry="211.09" fill="#6aa4ff" opacity="0.964" transform="rotate(312.00 394.38 406.10)"/>
+  <circle cx="512.00" cy="512.00" r="57.45" fill="#c29efb" stroke="none" stroke-width="0" opacity="1.000"/>
+</svg>

@@ -3,9 +3,14 @@ import { Platform, type TextStyle } from 'react-native';
 export type Scheme = 'dark' | 'light';
 
 export type Palette = {
+  /** Page and sheet background. */
   paper: string;
+  /** Raised card. */
   surface: string;
+  /** Grouped fill behind controls, and image placeholders. */
   sunken: string;
+  /** Attached card footer. */
+  footer: string;
   ink: string;
   ink2: string;
   ink3: string;
@@ -34,15 +39,16 @@ export type TypeTint = { base: string; soft: string; ink: string };
 export type Accent = { from: string; to: string; mid: string; on: string };
 
 const dark: Palette = {
-  paper: '#07080B',
-  surface: '#14171F',
-  sunken: '#222632',
-  ink: '#F4F1EA',
-  ink2: '#C2BDB4',
-  ink3: '#8E887F',
-  line: '#2A2E38',
-  lineStrong: '#3E4452',
-  onInk: '#12110F',
+  paper: '#131315',
+  surface: '#222225',
+  sunken: '#2C2C2E',
+  footer: '#2C2C2E',
+  ink: '#FFFFFF',
+  ink2: '#A1A1AA',
+  ink3: '#636366',
+  line: '#38383A',
+  lineStrong: '#48484A',
+  onInk: '#131315',
   money: '#3DDC97',
   moneySoft: '#10281C',
   moneyInk: '#B8F6D4',
@@ -60,14 +66,15 @@ const dark: Palette = {
 };
 
 const light: Palette = {
-  paper: '#FFFFFF',
-  surface: '#F4F5F7',
-  sunken: '#E8EAEE',
-  ink: '#1C1B19',
-  ink2: '#5C616A',
-  ink3: '#7A808A',
-  line: '#E4E6EA',
-  lineStrong: '#D0D4DA',
+  paper: '#F5F5F7',
+  surface: '#FFFFFF',
+  sunken: '#F2F2F7',
+  footer: '#F5F5F7',
+  ink: '#1D1D1F',
+  ink2: '#86868B',
+  ink3: '#AEAEB2',
+  line: '#E5E5EA',
+  lineStrong: '#D1D1D6',
   onInk: '#FFFFFF',
   money: '#0C7A45',
   moneySoft: '#E5F6EC',
@@ -120,20 +127,29 @@ export const accent: Record<Scheme, Record<MissionType | 'build', Accent>> = {
   },
 };
 
-export const uiFont = Platform.select({
-  web: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", Inter, "Segoe UI", system-ui, sans-serif',
-  ios: 'System',
+export const sansFont = Platform.select({
+  web: '"Avenir Next", "Segoe UI", sans-serif',
+  ios: 'Avenir Next',
   default: 'sans-serif',
 }) as string;
 
+export const serifFont = Platform.select({
+  web: '"Iowan Old Style", Palatino, Georgia, serif',
+  ios: 'Iowan Old Style',
+  default: 'Georgia',
+}) as string;
+
+/** Body, buttons, and inputs. */
+export const uiFont = sansFont;
+
 export const font = {
-  display: uiFont,
-  displayHeavy: uiFont,
-  displaySemi: uiFont,
-  body: uiFont,
-  medium: uiFont,
-  semi: uiFont,
-  bold: uiFont,
+  display: serifFont,
+  displayHeavy: serifFont,
+  displaySemi: serifFont,
+  body: sansFont,
+  medium: sansFont,
+  semi: sansFont,
+  bold: sansFont,
 } as const;
 
 export const weight = {
@@ -147,11 +163,11 @@ const tabular: TextStyle = { fontVariant: ['tabular-nums'] };
 
 /** Color is applied by the theme, not baked in here. */
 export const type = {
-  hero: { fontFamily: uiFont, fontWeight: weight.bold, fontSize: 56, lineHeight: 60, letterSpacing: -1.15, ...tabular },
-  display: { fontFamily: uiFont, fontWeight: weight.bold, fontSize: 34, lineHeight: 40, letterSpacing: -0.7, ...tabular },
-  title: { fontFamily: uiFont, fontWeight: weight.bold, fontSize: 28, lineHeight: 34, letterSpacing: -0.45 },
-  heading: { fontFamily: uiFont, fontWeight: weight.semibold, fontSize: 20, lineHeight: 26, letterSpacing: -0.25 },
-  subheading: { fontFamily: uiFont, fontWeight: weight.semibold, fontSize: 17, lineHeight: 24, letterSpacing: -0.2 },
+  hero: { fontFamily: serifFont, fontWeight: weight.medium, fontSize: 56, lineHeight: 60, letterSpacing: -1.15, ...tabular },
+  display: { fontFamily: serifFont, fontWeight: weight.medium, fontSize: 34, lineHeight: 40, letterSpacing: -0.7, ...tabular },
+  title: { fontFamily: serifFont, fontWeight: weight.medium, fontSize: 28, lineHeight: 34, letterSpacing: -0.45 },
+  heading: { fontFamily: serifFont, fontWeight: weight.medium, fontSize: 20, lineHeight: 26, letterSpacing: -0.25 },
+  subheading: { fontFamily: serifFont, fontWeight: weight.medium, fontSize: 17, lineHeight: 24, letterSpacing: -0.2 },
   body: { fontFamily: uiFont, fontWeight: weight.regular, fontSize: 15, lineHeight: 22 },
   bodyStrong: { fontFamily: uiFont, fontWeight: weight.semibold, fontSize: 15, lineHeight: 22 },
   small: { fontFamily: uiFont, fontWeight: weight.medium, fontSize: 13, lineHeight: 18 },

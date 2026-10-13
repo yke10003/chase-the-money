@@ -22,6 +22,7 @@ class CompleteOpportunityActionRequest extends FormRequest
             'asking_price_minor' => ['nullable', 'integer', 'min:1'],
             'listed_on' => ['nullable', 'string', 'max:80'],
             'listing_url' => ['nullable', 'string', 'max:500'],
+            'listing_description' => ['nullable', 'string', 'max:2000'],
             'amount_minor' => ['nullable', 'integer', 'min:1'],
             'expected_on' => ['nullable', 'date_format:Y-m-d'],
             'follow_up_on' => ['nullable', 'date_format:Y-m-d'],

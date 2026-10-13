@@ -5,6 +5,8 @@ export {
   font,
   palettes,
   radius,
+  sansFont,
+  serifFont,
   space,
   type,
   typeColor,

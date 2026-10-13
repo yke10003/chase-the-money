@@ -1,0 +1,14 @@
+Nolume icon lab export
+
+PNG files are the finished icons. SVG files named *.geometry.svg are the editable shape layout with flat fills, not the material.
+SVG files named *.hybrid.svg embed the sibling PNG by relative path.
+Exports freeze animation. Plastic environment drift is off (speed 0), and the light angle is the slider value.
+
+01-glass-bloom.png: shader. WebGPU shader frame from the shaders package (Plastic), scaled to exactly 1024×1024.
+02-liquid-coin.png: shader. WebGPU shader frame. Plastic shapes, then a Glass lens composited on top so the square stays opaque. Scaled to exactly 1024×1024.
+03-orbit.png: shader. WebGPU shader frame from the shaders package (Plastic), scaled to exactly 1024×1024.
+04-fluid-petals.png: shader. WebGPU shader frame from the shaders package (Plastic), scaled to exactly 1024×1024.
+05-growth.png: shader. WebGPU shader frame from the shaders package (Plastic), scaled to exactly 1024×1024.
+06-aperture.png: shader. WebGPU shader frame from the shaders package (Plastic), scaled to exactly 1024×1024.
+
+contact-sheet.png is a labeled overview. Labels sit outside the icon squares.

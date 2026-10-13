@@ -1,23 +1,36 @@
 import { useQuery } from '@tanstack/react-query';
-import { Slot, usePathname, useRouter } from 'expo-router';
+import { Stack, usePathname, useRouter } from 'expo-router';
 import { useEffect } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { Platform, View } from 'react-native';
 
 import { getCurrentGoal } from '@/api/endpoints';
-import { AppShell, FocusShell } from '@/components/shell';
+import { NativeTabWash } from '@/components/hero-wash-host';
+import { AppShell, FocusShell, keepsNativeTabs } from '@/components/shell';
 import { ErrorState } from '@/components/ui';
+import { useLayout } from '@/design/layout';
 import { space } from '@/design/tokens';
 import { errorMessage } from '@/lib/errors';
+import { useAuth } from '@/state/auth';
+import { useBoot } from '@/state/boot';
 import { useTheme } from '@/state/theme';
 
 export default function AppLayout() {
-  const { color } = useTheme();
+  const { user, loading } = useAuth();
+  const { markReady } = useBoot();
   const pathname = usePathname();
   const router = useRouter();
-  const goal = useQuery({ queryKey: ['goal', 'current'], queryFn: getCurrentGoal });
+  const goal = useQuery({
+    queryKey: ['goal', 'current'],
+    queryFn: getCurrentGoal,
+    enabled: !loading && user != null,
+  });
+  const phone = useLayout().phone;
+  const { color } = useTheme();
   const onboarding = pathname === '/onboarding';
+  const nativeTabs = Platform.OS === 'ios' && phone && keepsNativeTabs(pathname);
   const allowedWithoutGoal = onboarding || pathname === '/settings';
   const redirecting = goal.isSuccess && goal.data === null && !allowedWithoutGoal;
+  const settled = goal.isSuccess || goal.isError;
 
   useEffect(() => {
     if (redirecting) {
@@ -25,12 +38,18 @@ export default function AppLayout() {
     }
   }, [redirecting, router]);
 
-  if (goal.isLoading || redirecting) {
-    return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: color.paper }}>
-        <ActivityIndicator color={color.ink} />
-      </View>
-    );
+  useEffect(() => {
+    if (loading || !user || !settled || redirecting) {
+      return;
+    }
+
+    markReady();
+  }, [loading, user, settled, redirecting, markReady]);
+
+  // Screens under here fire their own requests. Wait until the token is loaded
+  // and /me has succeeded, or the first launch 401s and sticks (retry is off).
+  if (loading || user == null) {
+    return null;
   }
 
   if (goal.isError) {
@@ -41,17 +60,38 @@ export default function AppLayout() {
     );
   }
 
-  if (onboarding) {
-    return (
-      <FocusShell>
-        <Slot />
-      </FocusShell>
-    );
-  }
-
-  return (
+  const stack = (
+    <Stack
+      // The shader lives behind this navigator. An opaque stack container
+      // covers it on every main page.
+      unstable_nativeProps={{ nativeContainerStyle: { backgroundColor: 'transparent' } }}
+      screenOptions={{ headerShown: false, animation: 'none', contentStyle: { backgroundColor: 'transparent' } }}
+    >
+      <Stack.Screen name="(tabs)" options={{ contentStyle: { backgroundColor: 'transparent' } }} />
+      <Stack.Screen
+        name="product/[id]"
+        options={{
+          presentation: Platform.OS === 'ios' ? 'fullScreenModal' : 'card',
+          animation: Platform.OS === 'ios' ? 'slide_from_bottom' : 'fade',
+          gestureEnabled: true,
+          contentStyle: { backgroundColor: color.paper },
+        }}
+      />
+    </Stack>
+  );
+  const shell = onboarding ? (
+    <FocusShell>
+      {stack}
+    </FocusShell>
+  ) : nativeTabs ? (
+    <NativeTabWash>
+      {stack}
+    </NativeTabWash>
+  ) : (
     <AppShell>
-      <Slot />
+      {stack}
     </AppShell>
   );
+
+  return <View style={{ flex: 1 }}>{shell}</View>;
 }

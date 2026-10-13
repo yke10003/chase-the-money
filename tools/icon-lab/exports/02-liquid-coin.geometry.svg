@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024" role="img">
+  <title>B. Liquid Coin geometry</title>
+  <desc>Editable layout geometry only. Fills are flat palette colors. The glossy material is the sibling PNG, rendered by WebGPU shaders, and is not reconstructed here.</desc>
+  <rect width="1024" height="1024" fill="#f3eee6"/>
+  <ellipse cx="779.23" cy="459.63" rx="184.52" ry="227.94" fill="#ffc56a" opacity="0.946" transform="rotate(-42.00 779.23 459.63)"/>
+  <circle cx="512.00" cy="512.00" r="303.92" fill="#ffe4d6" stroke="none" stroke-width="0" opacity="1.000"/>
+  <circle cx="512.00" cy="512.00" r="297.84" fill="none" stroke="#5eb8ff" stroke-width="3" opacity="1"/>
+</svg>

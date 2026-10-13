@@ -387,19 +387,24 @@ export function Field({
   error,
   prefix,
   large = false,
+  lines = 1,
   ...input
-}: { label?: string; hint?: string; error?: string | null; prefix?: string; large?: boolean } & TextInputProps) {
+}: { label?: string; hint?: string; error?: string | null; prefix?: string; large?: boolean; lines?: number } & TextInputProps) {
   const { color, styles } = useUi();
   const [focused, setFocused] = useState(false);
+  const multiline = lines > 1;
 
   return (
     <View style={{ gap: 6 }}>
       {label ? <Text style={styles.label}>{label}</Text> : null}
-      <View style={[styles.inputBox, large && styles.inputBoxLarge, focused && styles.inputFocused, error ? styles.inputError : null]}>
+      <View style={[styles.inputBox, large && styles.inputBoxLarge, multiline && { alignItems: 'flex-start' }, focused && styles.inputFocused, error ? styles.inputError : null]}>
         {prefix ? <Text style={[styles.prefix, large && styles.prefixLarge]}>{prefix}</Text> : null}
         <TextInput
           accessibilityLabel={input.accessibilityLabel ?? label}
           placeholderTextColor={color.ink3}
+          multiline={multiline}
+          numberOfLines={lines}
+          textAlignVertical={multiline ? 'top' : 'center'}
           {...input}
           onFocus={(event) => {
             setFocused(true);
@@ -409,7 +414,7 @@ export function Field({
             setFocused(false);
             input.onBlur?.(event);
           }}
-          style={[styles.input, large && styles.inputLarge, webNoOutline]}
+          style={[styles.input, large && styles.inputLarge, multiline && { minHeight: lines * 22, paddingTop: 10 }, webNoOutline]}
         />
       </View>
       {error ? <Text style={styles.error}>{error}</Text> : hint ? <Text style={styles.hint}>{hint}</Text> : null}
@@ -417,7 +422,7 @@ export function Field({
   );
 }
 
-export function MoneyField(props: { label?: string; hint?: string; error?: string | null; value: string; onChangeText: (value: string) => void; placeholder?: string; large?: boolean; autoFocus?: boolean; accessibilityLabel?: string }) {
+export function MoneyField(props: { label?: string; hint?: string; error?: string | null; value: string; onChangeText: (value: string) => void; placeholder?: string; large?: boolean; autoFocus?: boolean; accessibilityLabel?: string; editable?: boolean }) {
   return <Field {...props} prefix="€" keyboardType="decimal-pad" inputMode="decimal" />;
 }
 

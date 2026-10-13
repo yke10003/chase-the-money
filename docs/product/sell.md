@@ -24,11 +24,13 @@ Category-specific answers that are not shared columns live in `details` JSON. Th
 
 ## Setup
 
-`setup_step` is `identity`, `photos`, `details`, `research`, `estimate`, or `done`.
+`setup_step` is `identity`, `photos`, `details`, `research`, `estimate`, `description`, or `done`.
 
-A draft opportunity has `context.sell_setup = draft`, no open playbook action, and is left out of Home. Sell shows it as “Setup incomplete” and opens the next step.
+A draft opportunity has `context.sell_setup = draft`, no open playbook action, and is left out of Home. Sell shows a draft once it has a name or a photo, and opens the next step. Closing a category-only draft deletes it. A named draft stays and can be resumed.
 
-Finishing the estimate marks setup done, writes potential money, and queues “Prepare the listing”. Unknown value is allowed and does not invent a number.
+Finishing the description marks setup done, keeps the product name separate from `listing_title`, and moves a new sale to ready to list with “Create the listing”. It does not queue “Prepare the listing”. Unknown value is allowed and does not invent a number. A blank description is allowed.
+
+Items that already have an open Prepare the listing action keep it. Completing that action still moves them to ready to list. Already listed products skip setup.
 
 XP is the existing action ledger, awarded once:
 
@@ -36,17 +38,23 @@ XP is the existing action ledger, awarded once:
 - leaving photos with at least one photo: 15
 - saving an estimate: 10
 
-Editing photos or comparables again does not award more. Skipping the estimate awards no valuation XP.
+Editing photos, the listing title, or comparables again does not award more. Skipping the estimate awards no valuation XP. Finishing twice does not add another list action or more XP.
 
 ## Already listed
 
 `POST /v1/sell/items/listed` creates the item and a listed opportunity in one step. It asks for the name, category, marketplace, asking price, and optional link and date. It does not run the photo or valuation wizard.
 
+## Listing text
+
+The product `name` is the identity used on Sell cards and the mission. `listing_title` is the marketplace title. It can be empty; the product name is the display fallback. Neither field overwrites the other.
+
+Apple Intelligence can later fill the description step. It is not implemented. The screen only edits the title and description.
+
 ## Photos
 
-Shot types are a fixed set of primitives (front, back, label, hallmark, and so on). Each category and subcategory maps to a short plan of recommended and optional shots. The client renders `photo_plan` from the API.
+Shot types are a fixed set of primitives (front, back, label, hallmark, and so on). Each category and subcategory maps to a short plan of recommended and optional shots. The client renders `photo_plan` from the API, including whether a shot was taken or skipped. Skipped shots are not asked for again when setup resumes. Photo review is not a creation step. Adding, reordering, cover, crop, and background removal happen on Product Detail.
 
-Uploads accept JPEG, PNG, and WebP up to 12 MB. The server corrects JPEG orientation when EXIF is available, and stores a JPEG whose long edge is at most 2400 pixels at quality 86. That is the file a later listing can reuse. There is no separate thumbnail pipeline and no background removal.
+Uploads accept JPEG, PNG, and WebP up to 12 MB. The server corrects JPEG orientation when EXIF is available, and stores a JPEG whose long edge is at most 2400 pixels at quality 86. That is the file a later listing can reuse. There is no separate thumbnail pipeline.
 
 Local development uses the `public` disk (`SELL_PHOTO_DISK`, default `public`). Production storage is not chosen. Set `SELL_PHOTO_DISK=s3` when a bucket exists; the API then returns a one-hour temporary URL instead of `/storage/...`.
 
@@ -58,4 +66,4 @@ Money Hunt room labels map onto the same category keys, then open the setup flow
 
 ## What is next
 
-Prepare and publish a listing: title, description, asking price, marketplace, listing URL, and later more than one listing per item. Offers belong on a listing. Stale-listing nudges, marketplace connections, scraping, and automatic valuation are not part of this flow.
+Create the listing on a marketplace: asking price, marketplace, and listing URL. The listing title and description are already on the item. Offers belong on a listing. On-device listing generation, marketplace connections, scraping, and automatic valuation are not part of this flow.

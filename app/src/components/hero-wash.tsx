@@ -1,24 +1,36 @@
-import { useId } from 'react';
-import { StyleSheet } from 'react-native';
-import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
+import { StyleSheet, View } from 'react-native';
 
+import HeroShader from '@/components/hero-shader';
+import { useLayout } from '@/design/layout';
 import type { Accent } from '@/design/palette';
+import { useReduceMotion } from '@/lib/motion';
 
-/** Static wash used on native, and on web until a shader is available. */
+/** Same corner as the hero card. Phone heroes are square to the screen edge. */
+const HERO_CORNER = 28;
+
 export function HeroWash({ paint }: { paint: Accent; wash?: string }) {
-  const raw = useId();
-  const id = `wash-${raw.replace(/:/g, '')}`;
+  const phone = useLayout().phone;
+  const reduce = useReduceMotion();
 
   return (
-    <Svg style={StyleSheet.absoluteFill} width="100%" height="100%" preserveAspectRatio="none">
-      <Defs>
-        <LinearGradient id={id} x1="0" y1="0" x2="1" y2="1">
-          <Stop offset="0" stopColor={paint.mid} />
-          <Stop offset="0.45" stopColor={paint.from} />
-          <Stop offset="1" stopColor={paint.to} />
-        </LinearGradient>
-      </Defs>
-      <Rect width="100%" height="100%" fill={`url(#${id})`} />
-    </Svg>
+    <View style={[StyleSheet.absoluteFill, { pointerEvents: 'none', overflow: 'hidden' }]}>
+      <HeroShader
+        from={paint.from}
+        to={paint.to}
+        mid={paint.mid}
+        onColor={paint.on}
+        corner={phone ? 0 : HERO_CORNER}
+        reduce={reduce}
+        dom={{
+          pointerEvents: 'none',
+          scrollEnabled: false,
+          bounces: false,
+          showsHorizontalScrollIndicator: false,
+          showsVerticalScrollIndicator: false,
+          style: { flex: 1, backgroundColor: 'transparent' },
+          containerStyle: { flex: 1, backgroundColor: 'transparent' },
+        }}
+      />
+    </View>
   );
 }

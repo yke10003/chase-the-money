@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024" role="img">
+  <title>C. Orbit geometry</title>
+  <desc>Editable layout geometry only. Fills are flat palette colors. The glossy material is the sibling PNG, rendered by WebGPU shaders, and is not reconstructed here.</desc>
+  <rect width="1024" height="1024" fill="#101820"/>
+  <ellipse cx="512.00" cy="512.00" rx="376.01" ry="86.26" fill="#5ee0d4" opacity="0.856" transform="rotate(18.00 512.00 512.00)"/>
+  <ellipse cx="512.00" cy="512.00" rx="389.28" ry="86.26" fill="#f0b15a" opacity="0.856" transform="rotate(84.00 512.00 512.00)"/>
+  <ellipse cx="512.00" cy="512.00" rx="402.55" ry="86.26" fill="#a78bfa" opacity="0.856" transform="rotate(150.00 512.00 512.00)"/>
+  <circle cx="512.00" cy="512.00" r="60.83" fill="#5ee0d4" stroke="none" stroke-width="0" opacity="1.000"/>
+</svg>

@@ -25,6 +25,7 @@ const BicycleIcon: PhosphorIcon = require('phosphor-react-native/src/icons/Bicyc
 const BriefcaseIcon: PhosphorIcon = require('phosphor-react-native/src/icons/Briefcase').BriefcaseIcon;
 const CalendarBlankIcon: PhosphorIcon = require('phosphor-react-native/src/icons/CalendarBlank').CalendarBlankIcon;
 const CaretDownIcon: PhosphorIcon = require('phosphor-react-native/src/icons/CaretDown').CaretDownIcon;
+const CaretLeftIcon: PhosphorIcon = require('phosphor-react-native/src/icons/CaretLeft').CaretLeftIcon;
 const CaretRightIcon: PhosphorIcon = require('phosphor-react-native/src/icons/CaretRight').CaretRightIcon;
 const ChartLineUpIcon: PhosphorIcon = require('phosphor-react-native/src/icons/ChartLineUp').ChartLineUpIcon;
 const ChatCircleIcon: PhosphorIcon = require('phosphor-react-native/src/icons/ChatCircle').ChatCircleIcon;
@@ -35,8 +36,10 @@ const CompassIcon: PhosphorIcon = require('phosphor-react-native/src/icons/Compa
 const CreditCardIcon: PhosphorIcon = require('phosphor-react-native/src/icons/CreditCard').CreditCardIcon;
 const DiamondIcon: PhosphorIcon = require('phosphor-react-native/src/icons/Diamond').DiamondIcon;
 const DotsThreeIcon: PhosphorIcon = require('phosphor-react-native/src/icons/DotsThree').DotsThreeIcon;
+const EyeIcon: PhosphorIcon = require('phosphor-react-native/src/icons/Eye').EyeIcon;
 const FileTextIcon: PhosphorIcon = require('phosphor-react-native/src/icons/FileText').FileTextIcon;
 const FlagIcon: PhosphorIcon = require('phosphor-react-native/src/icons/Flag').FlagIcon;
+const GearIcon: PhosphorIcon = require('phosphor-react-native/src/icons/Gear').GearIcon;
 const HandCoinsIcon: PhosphorIcon = require('phosphor-react-native/src/icons/HandCoins').HandCoinsIcon;
 const HandshakeIcon: PhosphorIcon = require('phosphor-react-native/src/icons/Handshake').HandshakeIcon;
 const HourglassIcon: PhosphorIcon = require('phosphor-react-native/src/icons/Hourglass').HourglassIcon;
@@ -71,6 +74,34 @@ const WalletIcon: PhosphorIcon = require('phosphor-react-native/src/icons/Wallet
 const WarningIcon: PhosphorIcon = require('phosphor-react-native/src/icons/Warning').WarningIcon;
 const WrenchIcon: PhosphorIcon = require('phosphor-react-native/src/icons/Wrench').WrenchIcon;
 const XIcon: PhosphorIcon = require('phosphor-react-native/src/icons/X').XIcon;
+const BookOpenIcon: PhosphorIcon = require('phosphor-react-native/src/icons/BookOpen').BookOpenIcon;
+const BrowserIcon: PhosphorIcon = require('phosphor-react-native/src/icons/Browser').BrowserIcon;
+const CarIcon: PhosphorIcon = require('phosphor-react-native/src/icons/Car').CarIcon;
+const ChalkboardTeacherIcon: PhosphorIcon = require('phosphor-react-native/src/icons/ChalkboardTeacher').ChalkboardTeacherIcon;
+const ClipboardTextIcon: PhosphorIcon = require('phosphor-react-native/src/icons/ClipboardText').ClipboardTextIcon;
+const CloudIcon: PhosphorIcon = require('phosphor-react-native/src/icons/Cloud').CloudIcon;
+const CodeIcon: PhosphorIcon = require('phosphor-react-native/src/icons/Code').CodeIcon;
+const CookingPotIcon: PhosphorIcon = require('phosphor-react-native/src/icons/CookingPot').CookingPotIcon;
+const CubeIcon: PhosphorIcon = require('phosphor-react-native/src/icons/Cube').CubeIcon;
+const CursorClickIcon: PhosphorIcon = require('phosphor-react-native/src/icons/CursorClick').CursorClickIcon;
+const DatabaseIcon: PhosphorIcon = require('phosphor-react-native/src/icons/Database').DatabaseIcon;
+const FirstAidIcon: PhosphorIcon = require('phosphor-react-native/src/icons/FirstAid').FirstAidIcon;
+const GlobeIcon: PhosphorIcon = require('phosphor-react-native/src/icons/Globe').GlobeIcon;
+const HammerIcon: PhosphorIcon = require('phosphor-react-native/src/icons/Hammer').HammerIcon;
+const HeadsetIcon: PhosphorIcon = require('phosphor-react-native/src/icons/Headset').HeadsetIcon;
+const HeartbeatIcon: PhosphorIcon = require('phosphor-react-native/src/icons/Heartbeat').HeartbeatIcon;
+const KanbanIcon: PhosphorIcon = require('phosphor-react-native/src/icons/Kanban').KanbanIcon;
+const LayoutIcon: PhosphorIcon = require('phosphor-react-native/src/icons/Layout').LayoutIcon;
+const MapPinIcon: PhosphorIcon = require('phosphor-react-native/src/icons/MapPin').MapPinIcon;
+const MopedIcon: PhosphorIcon = require('phosphor-react-native/src/icons/Moped').MopedIcon;
+const PaintBrushIcon: PhosphorIcon = require('phosphor-react-native/src/icons/PaintBrush').PaintBrushIcon;
+const PenNibIcon: PhosphorIcon = require('phosphor-react-native/src/icons/PenNib').PenNibIcon;
+const PhoneIcon: PhosphorIcon = require('phosphor-react-native/src/icons/Phone').PhoneIcon;
+const RobotIcon: PhosphorIcon = require('phosphor-react-native/src/icons/Robot').RobotIcon;
+const ShareNetworkIcon: PhosphorIcon = require('phosphor-react-native/src/icons/ShareNetwork').ShareNetworkIcon;
+const SparkleIcon: PhosphorIcon = require('phosphor-react-native/src/icons/Sparkle').SparkleIcon;
+const TextTIcon: PhosphorIcon = require('phosphor-react-native/src/icons/TextT').TextTIcon;
+const PersonSimpleWalkIcon: PhosphorIcon = require('phosphor-react-native/src/icons/PersonSimpleWalk').PersonSimpleWalkIcon;
 
 const ICONS = {
   armchair: ArmchairIcon,
@@ -91,6 +122,7 @@ const ICONS = {
   briefcase: BriefcaseIcon,
   calendar: CalendarBlankIcon,
   caretDown: CaretDownIcon,
+  caretLeft: CaretLeftIcon,
   caretRight: CaretRightIcon,
   chart: ChartLineUpIcon,
   chat: ChatCircleIcon,
@@ -101,8 +133,10 @@ const ICONS = {
   creditCard: CreditCardIcon,
   diamond: DiamondIcon,
   dots: DotsThreeIcon,
+  eye: EyeIcon,
   fileText: FileTextIcon,
   flag: FlagIcon,
+  gear: GearIcon,
   handCoins: HandCoinsIcon,
   handshake: HandshakeIcon,
   hourglass: HourglassIcon,
@@ -140,6 +174,34 @@ const ICONS = {
   warning: WarningIcon,
   wrench: WrenchIcon,
   x: XIcon,
+  bookOpen: BookOpenIcon,
+  browser: BrowserIcon,
+  car: CarIcon,
+  chalkboard: ChalkboardTeacherIcon,
+  clipboard: ClipboardTextIcon,
+  cloud: CloudIcon,
+  code: CodeIcon,
+  cookingPot: CookingPotIcon,
+  cube: CubeIcon,
+  cursorClick: CursorClickIcon,
+  database: DatabaseIcon,
+  firstAid: FirstAidIcon,
+  globe: GlobeIcon,
+  hammer: HammerIcon,
+  headset: HeadsetIcon,
+  heartbeat: HeartbeatIcon,
+  kanban: KanbanIcon,
+  layout: LayoutIcon,
+  mapPin: MapPinIcon,
+  moped: MopedIcon,
+  paintBrush: PaintBrushIcon,
+  penNib: PenNibIcon,
+  phone: PhoneIcon,
+  robot: RobotIcon,
+  share: ShareNetworkIcon,
+  sparkle: SparkleIcon,
+  textT: TextTIcon,
+  walk: PersonSimpleWalkIcon,
 } satisfies Record<string, PhosphorIcon>;
 
 export type IconName = keyof typeof ICONS;

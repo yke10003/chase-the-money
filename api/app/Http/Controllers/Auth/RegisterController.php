@@ -16,6 +16,17 @@ class RegisterController extends Controller
     {
         $user = User::query()->create($request->safe()->only(['name', 'email', 'password']));
 
+        if ($request->header('X-Nolume-Client') === 'native') {
+            $token = $user->createToken('iphone')->plainTextToken;
+
+            Log::info('Registered native user', ['user_id' => $user->id]);
+
+            return (new UserResource($user))
+                ->additional(['token' => $token])
+                ->response()
+                ->setStatusCode(201);
+        }
+
         Auth::login($user);
         $request->session()->regenerate();
 

@@ -5,6 +5,7 @@ namespace Tests\Feature\Api;
 use App\Domain\Sell\SellCatalog;
 use App\Enums\XpReason;
 use App\Models\FinancialImpact;
+use App\Models\Opportunity;
 use App\Models\SellItem;
 use App\Models\User;
 use App\Models\XpEvent;
@@ -108,28 +109,59 @@ class SellItemApiTest extends TestCase
             'advance' => true,
         ])->assertOk()->assertJsonPath('data.setup_step', 'estimate');
 
-        $finished = $this->actingAs($user)->postJson("/api/v1/sell/items/{$id}/finish", [
+        $this->actingAs($user)->postJson("/api/v1/sell/items/{$id}/finish", [
+            'listing_title' => 'Too early',
+        ])->assertStatus(422);
+
+        $this->actingAs($user)->patchJson("/api/v1/sell/items/{$id}", [
             'value_min_minor' => 40000,
             'value_max_minor' => 60000,
             'value_confidence' => 'rough',
+            'advance' => true,
+        ])->assertOk()
+            ->assertJsonPath('data.setup_step', 'description')
+            ->assertJsonPath('data.setup_done', false)
+            ->assertJsonPath('data.value_min_minor', 40000)
+            ->assertJsonPath('data.stage', 'valuing');
+
+        $this->assertSame([10, 15, 10], XpEvent::query()->orderBy('id')->pluck('amount')->all());
+
+        $this->actingAs($user)->patchJson("/api/v1/sell/items/{$id}", [
+            'listing_title' => 'Versace zwarte jas maat M',
+            'listing_description' => 'Zwarte jas, maat M.',
+        ])->assertOk()
+            ->assertJsonPath('data.setup_step', 'description')
+            ->assertJsonPath('data.name', 'Versace Medusa bomber jacket');
+
+        $finished = $this->actingAs($user)->postJson("/api/v1/sell/items/{$id}/finish", [
+            'listing_title' => 'Versace zwarte jas maat M',
+            'listing_description' => 'Zwarte jas, maat M.',
         ])->assertOk()
             ->assertJsonPath('data.setup_done', true)
+            ->assertJsonPath('data.name', 'Versace Medusa bomber jacket')
+            ->assertJsonPath('data.listing_title', 'Versace zwarte jas maat M')
+            ->assertJsonPath('data.listing_description', 'Zwarte jas, maat M.')
             ->assertJsonPath('data.value_min_minor', 40000)
             ->assertJsonPath('data.value_max_minor', 60000)
-            ->assertJsonPath('data.stage', 'preparing')
-            ->assertJsonPath('data.next.title', 'Prepare the listing');
+            ->assertJsonPath('data.stage', 'ready_to_list')
+            ->assertJsonPath('data.next.title', 'Create the listing')
+            ->assertJsonPath('data.next.playbook_key', 'list_item');
 
         $this->assertSame(0, FinancialImpact::query()->count());
         $this->assertSame(40000, $finished->json('data.value_min_minor'));
         $this->assertSame([10, 15, 10], XpEvent::query()->orderBy('id')->pluck('amount')->all());
         $this->assertSame(XpReason::ActionCompleted, XpEvent::query()->first()->reason);
+        $this->assertSame(1, Opportunity::query()->findOrFail($opportunityId)->actions()->where('playbook_key', 'list_item')->where('status', 'open')->count());
+        $this->assertSame(0, Opportunity::query()->findOrFail($opportunityId)->actions()->where('playbook_key', 'prepare_item')->count());
 
         $before = XpEvent::query()->count();
         $this->actingAs($user)->postJson("/api/v1/sell/items/{$id}/finish", [
-            'value_min_minor' => 40000,
-            'value_max_minor' => 60000,
-        ])->assertOk();
+            'listing_description' => 'Still the same jacket.',
+        ])->assertOk()
+            ->assertJsonPath('data.stage', 'ready_to_list')
+            ->assertJsonPath('data.name', 'Versace Medusa bomber jacket');
         $this->assertSame($before, XpEvent::query()->count());
+        $this->assertSame(1, Opportunity::query()->findOrFail($opportunityId)->actions()->where('playbook_key', 'list_item')->where('status', 'open')->count());
 
         $this->actingAs($other)->patchJson("/api/v1/sell/items/{$id}", [
             'name' => 'Stolen',
@@ -186,5 +218,65 @@ class SellItemApiTest extends TestCase
 
         $this->assertSame(['main', 'back', 'brand_label', 'size_label', 'detail', 'damage'], $keys);
         $this->assertFalse(SellCatalog::plan('wardrobe', 'jacket')[5]['recommended']);
+    }
+
+    #[Test]
+    public function a_skipped_shot_stays_skipped_and_an_empty_draft_can_be_discarded(): void
+    {
+        $user = User::factory()->create();
+        $created = $this->actingAs($user)->postJson('/api/v1/sell/items', [
+            'category' => 'wardrobe',
+            'subcategory' => 'jacket',
+            'name' => 'Coat',
+        ])->assertCreated();
+        $id = $created->json('data.id');
+
+        $this->actingAs($user)->patchJson("/api/v1/sell/items/{$id}", [
+            'skipped_shots' => ['damage', 'not-a-shot'],
+        ])->assertOk()
+            ->assertJsonPath('data.photo_plan.5.key', 'damage')
+            ->assertJsonPath('data.photo_plan.5.skipped', true)
+            ->assertJsonPath('data.photo_plan.0.skipped', false);
+
+        $this->actingAs($user)->deleteJson("/api/v1/sell/items/{$id}")
+            ->assertStatus(422);
+        $this->assertSame(1, SellItem::query()->count());
+
+        $empty = $this->actingAs($user)->postJson('/api/v1/sell/items', [
+            'category' => 'wardrobe',
+            'subcategory' => 'jacket',
+        ])->assertCreated();
+
+        $this->actingAs($user)->deleteJson('/api/v1/sell/items/'.$empty->json('data.id'))
+            ->assertNoContent();
+        $this->assertSame(1, SellItem::query()->count());
+    }
+
+    #[Test]
+    public function a_blank_description_still_finishes_without_changing_the_name(): void
+    {
+        $user = User::factory()->create();
+        $id = $this->actingAs($user)->postJson('/api/v1/sell/items', [
+            'category' => 'wardrobe',
+            'subcategory' => 'jacket',
+            'name' => 'Coat',
+        ])->assertCreated()->json('data.id');
+
+        foreach (['details', 'research', 'estimate', 'description'] as $step) {
+            $this->actingAs($user)->patchJson("/api/v1/sell/items/{$id}", [
+                'advance' => true,
+            ])->assertOk()->assertJsonPath('data.setup_step', $step);
+        }
+
+        $this->actingAs($user)->postJson("/api/v1/sell/items/{$id}/finish", [
+            'listing_title' => null,
+            'listing_description' => null,
+        ])->assertOk()
+            ->assertJsonPath('data.setup_done', true)
+            ->assertJsonPath('data.name', 'Coat')
+            ->assertJsonPath('data.listing_title', null)
+            ->assertJsonPath('data.listing_description', null)
+            ->assertJsonPath('data.stage', 'ready_to_list')
+            ->assertJsonPath('data.next.playbook_key', 'list_item');
     }
 }

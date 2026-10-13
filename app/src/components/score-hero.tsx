@@ -1,13 +1,19 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useRouter } from 'expo-router';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Polyline } from 'react-native-svg';
 
+import { useCockpit, useCockpitBody, useCockpitPublish } from '@/components/cockpit-context';
+import { GlassSurface, liquidGlass } from '@/components/glass';
 import { HeroWash } from '@/components/hero-wash';
+import { useHeroWashHost } from '@/components/hero-wash-host';
 import { Icon, type IconName } from '@/components/icon';
+import { MenuSheet } from '@/components/menu-sheet';
 import { useLayout } from '@/design/layout';
-import type { Accent } from '@/design/palette';
+import type { Accent, Scheme } from '@/design/palette';
 import { font, space, weight } from '@/design/tokens';
+import { outsideActionsVisible, sheetCover } from '@/lib/cockpit-scene';
 import { useReduceMotion } from '@/lib/motion';
 import { useTheme } from '@/state/theme';
 
@@ -19,6 +25,12 @@ export const homePaint: Accent = {
 };
 
 type Point = { period: string; amount_minor: number };
+
+/** Reserved band at the bottom of every hero, whether or not it has actions. */
+const ACTION_SLOT = 120;
+const CIRCLE = 54;
+/** How far the page sheet climbs over the phone hero. Kept inside the action slot's bottom padding. */
+const SHEET_OVERLAP = 16;
 
 export function cumulativeThroughToday(series: Point[] | null | undefined): number[] {
   if (!series || series.length === 0) {
@@ -50,17 +62,7 @@ export function cumulativeThroughToday(series: Point[] | null | undefined): numb
   return points;
 }
 
-export function ScoreHero({
-  wash,
-  paint,
-  kicker,
-  amount,
-  caption,
-  metrics = [],
-  series,
-  actions = [],
-  note,
-}: {
+type ScoreProps = {
   wash: 'home' | 'sell' | 'earn' | 'build' | 'recover' | 'save';
   paint: Accent;
   kicker: string;
@@ -70,18 +72,82 @@ export function ScoreHero({
   series?: Point[] | null;
   actions?: Array<{ label: string; onPress: () => void; icon?: IconName }>;
   note?: string | null;
-}) {
+  /** Drawn behind the one cockpit sheet. Page copies of ScoreHero only publish. */
+  backdrop?: boolean;
+  detent?: number;
+};
+
+export function ScoreHero(props: ScoreProps) {
+  const cockpit = useCockpit();
+  useCockpitPublish(props);
+
+  if (cockpit) {
+    return null;
+  }
+
+  return <ScoreHeroView {...props} />;
+}
+
+export function ScoreHeroView({
+  wash,
+  paint,
+  kicker,
+  amount,
+  caption,
+  metrics = [],
+  series,
+  actions = [],
+  note,
+  backdrop = false,
+  detent = 0,
+}: ScoreProps) {
   const phone = useLayout().phone;
   const insets = useSafeAreaInsets();
+  const { height } = useWindowDimensions();
+  const router = useRouter();
+  const host = useHeroWashHost();
+  const nativeSheet = phone && Platform.OS === 'ios';
+  const heroRef = useRef<View>(null);
+  const showOutside = !backdrop || outsideActionsVisible(detent);
+  const sheetHeight = backdrop ? sheetCover(height, insets.top, detent) : 0;
+
+  useEffect(() => {
+    host?.reportPaint(paint);
+  }, [host, paint]);
+
+  function placeWash() {
+    const relative = host?.contentRef.current;
+    const node = heroRef.current;
+
+    if (!host || !relative || !node) {
+      return;
+    }
+
+    node.measureLayout(
+      relative,
+      (x, y, width, height) => host.reportBox({ x, y, width, height }),
+      () => {},
+    );
+  }
 
   return (
-    <View style={[styles.hero, phone && { borderRadius: 0, minHeight: 340 + insets.top }]}>
-      <HeroWash paint={paint} wash={wash} />
-      <Momentum series={series} lift={phone} />
-      <View style={[styles.copy, phone && { paddingTop: insets.top + 56, paddingHorizontal: 20, paddingBottom: actions.length > 0 ? 112 : 78 }]}>
-        <Text style={styles.kicker}>{kicker}</Text>
-        <Text style={styles.amount}>{amount}</Text>
-        <Text style={styles.caption}>{caption}</Text>
+    <View ref={heroRef} onLayout={placeWash} pointerEvents="box-none" style={[styles.hero, host && { zIndex: 1 }, phone && { borderRadius: 0, minHeight: 400 + insets.top }, (nativeSheet || backdrop) && { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, minHeight: undefined }]}>
+      {host ? null : <HeroWash paint={paint} wash={wash} />}
+      {phone && Platform.OS === 'ios' && showOutside && !backdrop ? (
+        <View style={{ position: 'absolute', top: insets.top + 8, right: 12, zIndex: 5, flexDirection: 'row', gap: 8 }}>
+          <Pressable accessibilityRole="link" accessibilityLabel="Progress" onPress={() => router.push('/progress')} style={styles.heroIcon}>
+            <Icon name="chart" size={18} color="#F7F4EE" />
+          </Pressable>
+          <Pressable accessibilityRole="link" accessibilityLabel="Profile" onPress={() => router.push('/settings')} style={styles.heroIcon}>
+            <Icon name="user" size={18} color="#F7F4EE" />
+          </Pressable>
+        </View>
+      ) : null}
+      <Momentum series={series} />
+      <View style={[styles.copy, phone && { paddingTop: insets.top + (backdrop ? 16 : 56), paddingHorizontal: 20 }]}>
+        {kicker ? <Text numberOfLines={1} style={styles.kicker}>{kicker}</Text> : null}
+        {amount ? <Text numberOfLines={1} style={styles.amount}>{amount}</Text> : null}
+        {caption ? <Text style={styles.caption}>{caption}</Text> : null}
         {metrics.length > 0 ? (
           <View style={styles.metrics}>
             {metrics.map((metric) => (
@@ -93,37 +159,39 @@ export function ScoreHero({
           </View>
         ) : null}
         {note ? <Text style={styles.note}>{note}</Text> : null}
-        {actions.length > 0 ? (
-          <View style={styles.actions}>
-            {actions.map((action) => (
-              <GlassButton key={action.label} label={action.label} icon={action.icon} onPress={action.onPress} grow={phone} />
-            ))}
-          </View>
-        ) : null}
+      </View>
+      <View style={[styles.actionSlot, phone && { paddingBottom: SHEET_OVERLAP + 8 }, backdrop && { bottom: sheetHeight + 8, opacity: showOutside ? 1 : 0 }, !backdrop && nativeSheet && { bottom: '50%' }]} pointerEvents={showOutside && actions.length > 0 ? 'box-none' : 'none'}>
+        <View style={styles.actionGrid}>
+          {actions.slice(0, 4).map((action) => (
+            <GlassButton key={action.label} label={action.label} icon={action.icon} onPress={action.onPress} />
+          ))}
+        </View>
       </View>
     </View>
   );
 }
 
-export function GlassButton({ label, onPress, icon, grow = false }: { label: string; onPress: () => void; icon?: IconName; grow?: boolean }) {
+export function GlassButton({ label, onPress, icon }: { label: string; onPress: () => void; icon?: IconName }) {
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityLabel={label}
       onPress={onPress}
       style={(state) => [
-        styles.glass,
-        grow && styles.glassGrow,
-        (state as { hovered?: boolean }).hovered && { backgroundColor: 'rgba(255,255,255,0.26)' },
-        Platform.OS === 'web' ? ({ cursor: 'pointer', backdropFilter: 'blur(16px)' } as object) : null,
+        styles.cell,
+        (state as { hovered?: boolean }).hovered && !liquidGlass && { opacity: 0.82 },
+        Platform.OS === 'web' ? ({ cursor: 'pointer' } as object) : null,
       ]}
     >
-      {icon ? <Icon name={icon} size={16} color="#F7F4EE" /> : null}
-      <Text numberOfLines={1} style={styles.glassText}>{label}</Text>
+      <GlassSurface tone="hero" style={styles.circle}>
+        {icon ? <Icon name={icon} size={22} color="#F7F4EE" /> : null}
+      </GlassSurface>
+      <Text numberOfLines={2} style={styles.circleLabel}>{label}</Text>
     </Pressable>
   );
 }
 
-function Momentum({ series, lift = false }: { series?: Point[] | null; lift?: boolean }) {
+function Momentum({ series }: { series?: Point[] | null }) {
   const reduce = useReduceMotion();
   const points = useMemo(() => cumulativeThroughToday(series), [series]);
   const [drawn, setDrawn] = useState(reduce ? 1 : 0);
@@ -169,7 +237,7 @@ function Momentum({ series, lift = false }: { series?: Point[] | null; lift?: bo
   const line = coords.slice(0, visible).join(' ');
 
   return (
-    <View style={[styles.graph, lift && { bottom: 46, height: 36, left: 20, right: 20 }, { pointerEvents: 'none' }]}>
+    <View style={[styles.graph, { pointerEvents: 'none' }]}>
       <Svg width="100%" height="100%" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
         <Polyline points={line} fill="none" stroke="rgba(255,255,255,0.78)" strokeWidth="1.4" strokeLinejoin="round" strokeLinecap="round" />
       </Svg>
@@ -178,37 +246,121 @@ function Momentum({ series, lift = false }: { series?: Point[] | null; lift?: bo
 }
 
 const styles = StyleSheet.create({
-  hero: { borderRadius: 28, overflow: 'hidden', minHeight: 248, justifyContent: 'flex-end' },
-  copy: { padding: space.lg, gap: 6, paddingBottom: 78 },
-  kicker: { fontFamily: font.semi, fontWeight: weight.semibold, fontSize: 12, letterSpacing: 0.6, textTransform: 'uppercase', color: 'rgba(255,255,255,0.78)' },
+  hero: { borderRadius: 28, overflow: 'hidden', minHeight: 280 },
+  heroIcon: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.28)' },
+  copy: { padding: space.lg, paddingBottom: ACTION_SLOT, gap: 6 },
+  kicker: { fontFamily: font.semi, fontWeight: weight.semibold, fontSize: 12, lineHeight: 16, letterSpacing: 0.6, textTransform: 'uppercase', color: 'rgba(255,255,255,0.78)' },
   amount: { fontFamily: font.display, fontWeight: weight.bold, fontSize: 56, lineHeight: 60, letterSpacing: -1.1, color: '#F7F4EE' },
-  caption: { fontFamily: font.medium, fontWeight: weight.medium, fontSize: 15, color: 'rgba(255,255,255,0.82)' },
+  caption: { fontFamily: font.medium, fontWeight: weight.medium, fontSize: 15, lineHeight: 20, color: 'rgba(255,255,255,0.82)' },
   metrics: { flexDirection: 'row', flexWrap: 'wrap', gap: space.lg, marginTop: space.sm },
-  metricValue: { fontFamily: font.semi, fontWeight: weight.semibold, fontSize: 18, color: '#F7F4EE' },
-  metricLabel: { fontFamily: font.medium, fontSize: 12, color: 'rgba(255,255,255,0.72)' },
-  note: { fontFamily: font.medium, fontSize: 13, color: 'rgba(255,255,255,0.72)', marginTop: 4 },
-  actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: space.sm },
-  glass: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    borderRadius: 999,
-    minHeight: 44,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    backgroundColor: 'rgba(255,255,255,0.16)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.32)',
+  metricValue: { fontFamily: font.semi, fontWeight: weight.semibold, fontSize: 18, lineHeight: 22, color: '#F7F4EE' },
+  metricLabel: { fontFamily: font.medium, fontSize: 12, lineHeight: 16, color: 'rgba(255,255,255,0.72)' },
+  note: { fontFamily: font.medium, fontSize: 13, lineHeight: 18, color: 'rgba(255,255,255,0.72)', marginTop: 4 },
+  actionSlot: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: ACTION_SLOT,
+    paddingHorizontal: 8,
+    paddingBottom: 14,
+    justifyContent: 'flex-end',
   },
-  glassGrow: { flexGrow: 1, justifyContent: 'center' },
-  glassText: { fontFamily: font.semi, fontWeight: weight.semibold, fontSize: 14, color: '#F7F4EE' },
-  graph: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 72 },
+  actionGrid: { flexDirection: 'row', alignItems: 'flex-start' },
+  cell: { width: '25%', alignItems: 'center', gap: 6 },
+  circle: { width: CIRCLE, height: CIRCLE, borderRadius: CIRCLE / 2, alignItems: 'center', justifyContent: 'center' },
+  circleLabel: { width: '100%', fontFamily: font.medium, fontWeight: weight.medium, fontSize: 11, lineHeight: 13, color: 'rgba(255,255,255,0.92)', textAlign: 'center' },
+  sheetIcon: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  graph: { position: 'absolute', left: 20, right: 20, bottom: 52, height: 32 },
 });
 
-/** Phone cockpit pages: the score runs to the screen edge, and the page comes up over it. */
-export function MobileStage({ hero, children }: { hero: ReactNode; children: ReactNode }) {
-  const phone = useLayout().phone;
+/** Large page title, with the progress and profile buttons on the trailing edge. */
+function SheetHeading({ title }: { title: string }) {
+  const router = useRouter();
   const { color, scheme } = useTheme();
+
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44 }}>
+      <Text
+        numberOfLines={1}
+        accessibilityRole="header"
+        style={{
+          flex: 1,
+          fontSize: 34,
+          lineHeight: 41,
+          fontWeight: weight.bold,
+          letterSpacing: 0.37,
+          color: color.ink,
+          fontFamily: Platform.OS === 'ios' ? undefined : font.body,
+        }}
+      >
+        {title}
+      </Text>
+      <SheetIconButton label="Progress" icon="chart" ink={color.ink} scheme={scheme} onPress={() => router.push('/progress')} />
+      <SheetIconButton label="Profile" icon="user" ink={color.ink} scheme={scheme} onPress={() => router.push('/settings')} />
+    </View>
+  );
+}
+
+function SheetIconButton({
+  label,
+  icon,
+  ink,
+  scheme,
+  onPress,
+}: {
+  label: string;
+  icon: IconName;
+  ink: string;
+  scheme: Scheme;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress} hitSlop={6}>
+      <GlassSurface tone="bar" scheme={scheme} interactive style={styles.sheetIcon}>
+        <Icon name={icon} size={20} color={ink} />
+      </GlassSurface>
+    </Pressable>
+  );
+}
+
+/** Phone cockpit pages: the score runs to the screen edge, and the page comes up over it. */
+export function MobileStage({ title, hero, children }: { title: string; hero: ReactNode; children: ReactNode }) {
+  const phone = useLayout().phone;
+  const cockpit = useCockpit();
+  const { color, scheme } = useTheme();
+  const heading = <SheetHeading title={title} />;
+  const sheetBody = (
+    <ScrollView
+      style={{ flex: 1 }}
+      alwaysBounceVertical
+      contentInsetAdjustmentBehavior="never"
+      keyboardShouldPersistTaps="handled"
+      contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 96, gap: space.xl }}
+    >
+      {heading}
+      {children}
+    </ScrollView>
+  );
+  useCockpitBody(cockpit ? sheetBody : null);
+
+  const sheet = (
+    <View
+      style={{
+        marginTop: -SHEET_OVERLAP,
+        backgroundColor: color.paper,
+        borderTopLeftRadius: 28,
+        borderTopRightRadius: 28,
+        paddingHorizontal: 20,
+        paddingTop: 20,
+        gap: space.xl,
+        boxShadow: scheme === 'dark' ? '0 -16px 36px rgba(0,0,0,0.28)' : '0 -12px 28px rgba(16,16,16,0.06)',
+      }}
+    >
+      {heading}
+      {children}
+    </View>
+  );
 
   if (!phone) {
     return (
@@ -219,23 +371,29 @@ export function MobileStage({ hero, children }: { hero: ReactNode; children: Rea
     );
   }
 
+  // iOS phone: the list is drawn in the one shared sheet. The hero stays behind it.
+  if (Platform.OS === 'ios' && cockpit) {
+    return hero;
+  }
+
+  if (Platform.OS === 'ios') {
+    return (
+      <View style={{ flex: 1 }}>
+        {hero}
+        <MenuSheet paper={color.paper} onDetent={() => {}}>
+          <View style={{ paddingHorizontal: 20, paddingTop: 20, gap: space.xl }}>
+            {heading}
+            {children}
+          </View>
+        </MenuSheet>
+      </View>
+    );
+  }
+
   return (
     <View>
       {hero}
-      <View
-        style={{
-          marginTop: -36,
-          backgroundColor: color.paper,
-          borderTopLeftRadius: 28,
-          borderTopRightRadius: 28,
-          paddingHorizontal: space.md,
-          paddingTop: space.lg,
-          gap: space.xl,
-          boxShadow: scheme === 'dark' ? '0 -16px 36px rgba(0,0,0,0.28)' : '0 -12px 28px rgba(16,16,16,0.06)',
-        }}
-      >
-        {children}
-      </View>
+      {sheet}
     </View>
   );
 }

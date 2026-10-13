@@ -19,4 +19,4 @@ One opportunity per item matches the current playbook. Listings are not a table 
 
 ## Consequences
 
-Draft setup does not appear on Home. Finishing setup queues “Prepare the listing” and does not publish anywhere. Marketplace connections, scraping, and automatic valuation stay out. Photo files use `SELL_PHOTO_DISK` (public disk locally, S3 when configured).
+Draft setup does not appear on Home. Finishing the description moves a new sale to ready to list and queues “Create the listing”. It does not publish anywhere. Marketplace connections, scraping, automatic valuation, and on-device listing generation stay out. Photo files use `SELL_PHOTO_DISK` (public disk locally, S3 when configured).

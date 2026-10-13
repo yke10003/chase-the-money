@@ -350,7 +350,7 @@ export function CockpitFrame({
 
   if (layout.phone) {
     return (
-      <MobileStage hero={moves}>
+      <MobileStage title={title} hero={moves}>
         {below}
         {aside}
       </MobileStage>

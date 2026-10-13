@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -20,6 +20,7 @@ function useDiscoverUi() {
 }
 import { errorMessage } from '@/lib/errors';
 import { majorToMinor } from '@/lib/money';
+import { rememberSellItem, startSellWrite } from '@/lib/sell-cache';
 import { useRefreshProduct } from '@/state/query';
 
 type Tool = 'hunt' | 'skills' | 'recovery' | 'expenses';
@@ -131,6 +132,7 @@ export function MoneyHunt({ categories }: { categories: string[] }) {
   const layout = useLayout();
   const router = useRouter();
   const refresh = useRefreshProduct();
+  const client = useQueryClient();
   const [category, setCategory] = useState<string | null>(null);
   const [itemName, setItemName] = useState('');
   const [worth, setWorth] = useState('');
@@ -162,7 +164,10 @@ export function MoneyHunt({ categories }: { categories: string[] }) {
         name,
         worth_minor: worthMinor,
       });
+      const token = startSellWrite(created.data.id);
+      await rememberSellItem(client, created.data, token);
       await refresh();
+      await rememberSellItem(client, created.data, token);
       router.push(`/sell/setup/${created.data.id}`);
     } catch (caught) {
       setError(caught);

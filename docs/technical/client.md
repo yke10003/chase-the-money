@@ -58,7 +58,7 @@ On boot, `GET /api/v1/me` decides the session.
 | Path | Screen |
 | --- | --- |
 | `/login`, `/register` | Session, split layout on desktop |
-| `/onboarding` | Target, skills, approach, right now. No app navigation. Ends on `/?welcome=1` |
+| `/onboarding` | Target, work, skills, experience, approach, right now. No app navigation. Ends on `/?welcome=1` |
 | `/` | Home, with a strip into the four cockpits once anything exists |
 | `/sell`, `/freelance`, `/build`, `/recover` | Cockpits. See [cockpits](../product/cockpits.md) |
 | `/sell/new`, `/sell/setup/[id]`, `/sell/listed`, `/sell/items/[id]` | Sell item setup, an already-listed shortcut, and the item. See [sell](../product/sell.md). |

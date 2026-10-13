@@ -1,0 +1,21 @@
+{
+  "name": "nolume-petal-lab",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "export": "tsx scripts/export-assets.ts",
+    "render": "tsx scripts/render-loop.ts",
+    "icon-layers": "tsx scripts/export-icon-layers.ts"
+  },
+  "devDependencies": {
+    "playwright": "^1.64.0",
+    "puppeteer-core": "^24.15.0",
+    "tsx": "^4.20.3",
+    "typescript": "^5.9.2",
+    "vite": "^7.1.5"
+  },
+  "dependencies": {
+    "shaders": "^3.2.475"
+  }
+}

@@ -16,6 +16,10 @@ use Illuminate\Support\Facades\Storage;
     'is_cover',
     'width',
     'height',
+    'edited_path',
+    'cutout_path',
+    'background',
+    'collage',
 ])]
 class SellItemPhoto extends Model
 {
@@ -29,6 +33,7 @@ class SellItemPhoto extends Model
             'is_cover' => 'boolean',
             'width' => 'integer',
             'height' => 'integer',
+            'collage' => 'array',
         ];
     }
 
@@ -39,18 +44,46 @@ class SellItemPhoto extends Model
 
     public function deleteFile(): void
     {
-        Storage::disk($this->disk)->delete($this->path);
+        $disk = Storage::disk($this->disk);
+        $disk->delete($this->path);
+
+        if ($this->edited_path) {
+            $disk->delete($this->edited_path);
+        }
+
+        if ($this->cutout_path) {
+            $disk->delete($this->cutout_path);
+        }
     }
 
     public function url(): string
+    {
+        return $this->fileUrl($this->edited_path ?: $this->path);
+    }
+
+    public function cutoutUrl(): ?string
+    {
+        if (! $this->cutout_path) {
+            return null;
+        }
+
+        return $this->fileUrl($this->cutout_path);
+    }
+
+    public function originalUrl(): string
+    {
+        return $this->fileUrl($this->path);
+    }
+
+    private function fileUrl(string $path): string
     {
         $disk = Storage::disk($this->disk);
         $driver = config('filesystems.disks.'.$this->disk.'.driver');
 
         if ($driver === 's3') {
-            return $disk->temporaryUrl($this->path, now()->addHour());
+            return $disk->temporaryUrl($path, now()->addHour());
         }
 
-        return $disk->url($this->path);
+        return $disk->url($path);
     }
 }

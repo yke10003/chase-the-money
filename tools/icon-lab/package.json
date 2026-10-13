@@ -1,0 +1,21 @@
+{
+  "name": "nolume-icon-lab",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "export": "tsx scripts/export-assets.ts"
+  },
+  "dependencies": {
+    "jszip": "^3.10.1",
+    "shaders": "^3.2.466"
+  },
+  "devDependencies": {
+    "puppeteer-core": "^24.15.0",
+    "tsx": "^4.20.3",
+    "typescript": "^5.9.2",
+    "vite": "^7.1.5"
+  }
+}

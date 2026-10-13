@@ -2,13 +2,44 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-import { journeyIndex, parseEstimate } from './sell';
+import { journeyIndex, listingDraft, openShot, parseEstimate, shotAfter } from './sell';
 
 test('the journey index follows the sell setup order', () => {
   assert.equal(journeyIndex('category'), 0);
   assert.equal(journeyIndex('photos'), 2);
   assert.equal(journeyIndex('estimate'), 5);
-  assert.equal(journeyIndex('done'), 5);
+  assert.equal(journeyIndex('description'), 6);
+  assert.equal(journeyIndex('done'), 6);
+});
+
+test('a skipped photo does not reopen, and the listing draft does not rename the product', () => {
+  const plan = [
+    { key: 'main', recommended: true, taken: true },
+    { key: 'back', recommended: true },
+    { key: 'damage', recommended: false, skipped: true },
+  ];
+
+  assert.equal(openShot(plan), 'back');
+  assert.equal(openShot(plan.map((shot) => shot.key === 'back' ? { ...shot, skipped: true } : shot)), null);
+  assert.equal(shotAfter(plan, 'main'), 'back');
+  assert.equal(shotAfter(plan, 'back'), null);
+  assert.deepEqual(listingDraft({ name: 'Versace jacket', listing_title: null, listing_description: null }), {
+    title: 'Versace jacket',
+    description: '',
+  });
+  assert.deepEqual(listingDraft({ name: 'Versace jacket', listing_title: 'Versace zwarte jas', listing_description: 'Maat M.' }), {
+    title: 'Versace zwarte jas',
+    description: 'Maat M.',
+  });
+});
+
+test('guided photos do not reuse another shot, and estimate does not ask for confidence', () => {
+  const setup = readFileSync(new URL('../app/(app)/(tabs)/sell/setup/[id].tsx', import.meta.url), 'utf8');
+
+  assert.equal(setup.includes('opacity: 0.35'), false);
+  assert.equal(setup.includes('Pretty sure'), false);
+  assert.equal(setup.includes("shot === 'review'"), false);
+  assert.equal(setup.includes('if (item.setup_step === held.step)'), true);
 });
 
 test('an empty estimate stays unknown and a range stays a range', () => {
@@ -26,8 +57,26 @@ test('an empty estimate stays unknown and a range stays a range', () => {
   assert.equal('error' in parseEstimate('600', '400', false), true);
 });
 
+test('a finished item returns to the sell overview already on the stack', () => {
+  const source = readFileSync(new URL('../app/(app)/(tabs)/sell/items/[id]/index.tsx', import.meta.url), 'utf8');
+
+  assert.equal(source.includes("router.replace('/sell')"), false);
+  assert.equal(source.includes('leaveSell(router)'), true);
+});
+
+test('background removal stays on the editor, and the sheet helper is not an expo route', () => {
+  const edit = readFileSync(new URL('../app/(app)/(tabs)/sell/items/[id]/edit.tsx', import.meta.url), 'utf8');
+  const background = readFileSync(new URL('../app/(app)/(tabs)/sell/items/[id]/background.tsx', import.meta.url), 'utf8');
+
+  assert.equal(edit.includes("itemLeaf(pathname, id, 'background')"), false);
+  assert.equal(edit.includes('@/lib/sell-background-sheet'), false);
+  assert.equal(background.includes('@/lib/sell-background-sheet'), true);
+  assert.equal(edit.includes('./background-sheet'), false);
+  assert.equal(background.includes('./background-sheet'), false);
+});
+
 test('starting a sale does not offer another cockpit', () => {
-  const source = readFileSync(new URL('../app/(app)/sell/new.tsx', import.meta.url), 'utf8');
+  const source = readFileSync(new URL('../app/(app)/(tabs)/sell/new.tsx', import.meta.url), 'utf8');
 
   assert.equal(source.includes('Freelance'), false);
   assert.equal(source.includes('Recover'), false);

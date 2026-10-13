@@ -7,7 +7,7 @@
 ## What we ask
 
 - Work areas, as many as fit ([0025](../decisions/0025-multiple-work-areas.md)), then suggested skills from those areas, plus custom skills.
-- Comfortable, experienced, or expert. Not a CV. Profile can set a level per skill.
+- Comfortable, experienced, or expert, chosen per skill during onboarding. Not a CV.
 - What they are willing to do, grouped by Earn, Sell, Recover, and Save, and what they do not want.
 - Broad time availability.
 - Starting capital is not asked in onboarding. It can be set in Profile, is stored, and does not change the first plan or Discover yet.

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024" role="img">
+  <title>D. Fluid Petals geometry</title>
+  <desc>Editable layout geometry only. Fills are flat palette colors. The glossy material is the sibling PNG, rendered by WebGPU shaders, and is not reconstructed here.</desc>
+  <rect width="1024" height="1024" fill="#1c1418"/>
+  <ellipse cx="505.32" cy="464.47" rx="206.44" ry="309.66" fill="#ff5d7e" opacity="0.942" transform="rotate(-26.00 505.32 464.47)"/>
+  <ellipse cx="616.42" cy="565.19" rx="229.38" ry="183.50" fill="#ff9a3c" opacity="0.942" transform="rotate(30.00 616.42 565.19)"/>
+  <ellipse cx="405.94" cy="585.07" rx="172.03" ry="263.78" fill="#6d4dff" opacity="0.942" transform="rotate(-60.00 405.94 585.07)"/>
+  <ellipse cx="527.60" cy="519.50" rx="103.22" ry="286.72" fill="#2ec9b6" opacity="0.942" transform="rotate(70.00 527.60 519.50)"/>
+  <ellipse cx="631.73" cy="398.23" rx="86.02" ry="229.38" fill="#c084fc" opacity="0.942" transform="rotate(10.00 631.73 398.23)"/>
+  <ellipse cx="362.72" cy="484.51" rx="97.48" ry="217.91" fill="#ffbe8a" opacity="0.942" transform="rotate(56.00 362.72 484.51)"/>
+</svg>

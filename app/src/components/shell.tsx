@@ -3,9 +3,12 @@ import { useMemo, type ReactNode } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View, type PressableStateCallbackType } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { BrandMark } from '@/components/brand';
+import { GlassSurface, liquidGlass } from '@/components/glass';
+import { HeroWashProvider, HeroWashSlot, useHeroWashHost } from '@/components/hero-wash-host';
 import { Icon, type IconName } from '@/components/icon';
 import { useLayout } from '@/design/layout';
-import type { Palette, Scheme } from '@/design/palette';
+import type { Palette } from '@/design/palette';
 import { contentMaxWidth, font, radius, space, weight } from '@/design/tokens';
 import { useAuth } from '@/state/auth';
 import { useTheme } from '@/state/theme';
@@ -35,6 +38,20 @@ export function isCockpitRoot(pathname: string): boolean {
   return COCKPIT_ROOTS.has(pathname);
 }
 
+/** Routes that sit in the iOS system tab bar. */
+export function isNativeTabPath(pathname: string): boolean {
+  return pathname === '/'
+    || pathname.startsWith('/sell')
+    || pathname.startsWith('/freelance')
+    || pathname.startsWith('/build')
+    || pathname.startsWith('/recover');
+}
+
+/** Product detail is a modal over the tabs, so the tab shell has to stay mounted. */
+export function keepsNativeTabs(pathname: string): boolean {
+  return isNativeTabPath(pathname) || pathname.startsWith('/product/');
+}
+
 function isSellFocus(pathname: string): boolean {
   return pathname === '/sell/new'
     || pathname === '/sell/listed'
@@ -44,7 +61,7 @@ function isSellFocus(pathname: string): boolean {
 
 function useShell() {
   const theme = useTheme();
-  const styles = useMemo(() => createShellStyles(theme.color, theme.scheme), [theme.color, theme.scheme]);
+  const styles = useMemo(() => createShellStyles(theme.color), [theme.color]);
 
   function tint(key: TintKey) {
     if (key === 'sell') return theme.accent.sell.from;
@@ -68,8 +85,17 @@ function isActive(pathname: string, href: string): boolean {
 }
 
 export function AppShell({ children }: { children: ReactNode }) {
+  return (
+    <HeroWashProvider>
+      <ShellFrame>{children}</ShellFrame>
+    </HeroWashProvider>
+  );
+}
+
+function ShellFrame({ children }: { children: ReactNode }) {
   const { styles } = useShell();
   const layout = useLayout();
+  const host = useHeroWashHost();
 
   if (layout.phone) {
     return <PhoneShell>{children}</PhoneShell>;
@@ -79,23 +105,19 @@ export function AppShell({ children }: { children: ReactNode }) {
     <View style={styles.frame}>
       {layout.desktop ? <Rail /> : <CompactRail />}
       <ScrollView style={{ flex: 1, minWidth: 0 }} contentContainerStyle={[styles.content, { paddingHorizontal: layout.wide ? space.xxl : space.xl }]}>
-        <View style={styles.contentInner}>{children}</View>
+        <View ref={host?.contentRef} collapsable={false} style={styles.contentInner}>
+          <HeroWashSlot />
+          {children}
+        </View>
       </ScrollView>
     </View>
   );
 }
 
 function Wordmark({ compact = false, light = true }: { compact?: boolean; light?: boolean }) {
-  const { color, styles } = useShell();
+  const { color } = useShell();
 
-  return (
-    <View style={styles.wordmark}>
-      <View style={styles.mark}>
-        <View style={styles.markFill} />
-      </View>
-      {compact ? null : <Text style={[styles.wordmarkText, { color: light ? color.ink : color.onInk }]}>Nolume</Text>}
-    </View>
-  );
+  return <BrandMark compact={compact} color={light ? color.ink : color.onInk} />;
 }
 
 function Rail() {
@@ -106,7 +128,7 @@ function Rail() {
   return (
     <View style={styles.rail}>
       <View style={{ gap: space.lg }}>
-        <Pressable accessibilityRole="link" accessibilityLabel="Home" onPress={() => router.push('/')}>
+        <Pressable accessibilityRole="link" accessibilityLabel="Home" onPress={() => router.push('/')} style={{ paddingHorizontal: 8 }}>
           <Wordmark />
         </Pressable>
         <View style={{ gap: 2 }}>
@@ -201,12 +223,13 @@ function CompactRail() {
 }
 
 function PhoneShell({ children }: { children: ReactNode }) {
-  const { color, styles, tint } = useShell();
+  const { color, scheme, styles, tint } = useShell();
   const pathname = usePathname();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const host = useHeroWashHost();
   const bleed = isCockpitRoot(pathname);
-  const focus = isSellFocus(pathname);
+  const focus = isSellFocus(pathname) || pathname.startsWith('/product/');
 
   if (focus) {
     return (
@@ -216,38 +239,66 @@ function PhoneShell({ children }: { children: ReactNode }) {
     );
   }
 
+  const ios = Platform.OS === 'ios';
+
   return (
     <View style={{ flex: 1, backgroundColor: color.paper }}>
-      {bleed ? null : <View style={{ height: insets.top }} />}
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: bleed ? 0 : space.md, paddingTop: bleed ? 0 : space.sm, paddingBottom: 128 + insets.bottom }}>
-        {bleed ? (
-          <View style={{ position: 'absolute', top: insets.top + 8, right: 12, zIndex: 5, flexDirection: 'row', gap: 8 }}>
-            <Pressable accessibilityRole="link" accessibilityLabel="Progress" onPress={() => router.push('/progress')} style={styles.heroIcon}>
-              <Icon name="chart" size={18} color="#F7F4EE" />
-            </Pressable>
-            <Pressable accessibilityRole="link" accessibilityLabel="Profile" onPress={() => router.push('/settings')} style={styles.heroIcon}>
-              <Icon name="user" size={18} color="#F7F4EE" />
-            </Pressable>
-          </View>
-        ) : null}
-        {children}
+      {ios ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+          onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))}
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingTop: insets.top + 8, paddingHorizontal: space.md, paddingBottom: 4 }}
+        >
+          <Icon name="arrowLeft" size={18} color={color.ink} />
+          <Text style={{ fontFamily: font.medium, fontSize: 16, color: color.ink }}>Back</Text>
+        </Pressable>
+      ) : bleed ? null : (
+        <View style={{ height: insets.top }} />
+      )}
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: bleed ? 0 : space.md, paddingTop: bleed ? 0 : space.sm, paddingBottom: (ios ? 24 : 128) + insets.bottom }}>
+        <View ref={host?.contentRef} collapsable={false}>
+          <HeroWashSlot />
+          {bleed ? (
+            <View style={{ position: 'absolute', top: insets.top + 8, right: 12, zIndex: 5, flexDirection: 'row', gap: 8 }}>
+              <Pressable accessibilityRole="link" accessibilityLabel="Progress" onPress={() => router.push('/progress')} style={styles.heroIcon}>
+                <Icon name="chart" size={18} color="#F7F4EE" />
+              </Pressable>
+              <Pressable accessibilityRole="link" accessibilityLabel="Profile" onPress={() => router.push('/settings')} style={styles.heroIcon}>
+                <Icon name="user" size={18} color="#F7F4EE" />
+              </Pressable>
+            </View>
+          ) : null}
+          {children}
+        </View>
       </ScrollView>
-      <View style={[styles.tabDock, { bottom: Math.max(insets.bottom, 10) }]}>
-        <View style={styles.tabBar}>
+      {ios ? null : <View style={[styles.tabDock, { bottom: Math.max(insets.bottom, 10) }]}>
+        <GlassSurface scheme={scheme} interactive style={styles.tabBar}>
           {PHONE_TABS.map((item) => {
             const active = isActive(pathname, item.href);
+            let activeFill = 'rgba(255,255,255,0.72)';
+
+            if (liquidGlass) {
+              activeFill = 'rgba(255,255,255,0.28)';
+            } else if (scheme === 'dark') {
+              activeFill = 'rgba(255,255,255,0.14)';
+            }
 
             return (
-              <Pressable key={item.href} accessibilityRole="tab" accessibilityState={{ selected: active }} onPress={() => router.push(item.href)} style={styles.tab}>
-                <View style={styles.tabIcon}>
-                  <Icon name={item.icon} size={22} color={active ? tint(item.tint) : color.ink3} weight={active ? 'fill' : 'regular'} />
-                </View>
+              <Pressable
+                key={item.href}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: active }}
+                onPress={() => router.push(item.href)}
+                style={[styles.tab, active && { backgroundColor: activeFill }]}
+              >
+                <Icon name={item.icon} size={22} color={active ? tint(item.tint) : color.ink3} weight={active ? 'fill' : 'regular'} />
                 <Text style={[styles.tabLabel, active && { color: color.ink }]} numberOfLines={1}>{item.short}</Text>
               </Pressable>
             );
           })}
-        </View>
-      </View>
+        </GlassSurface>
+      </View>}
     </View>
   );
 }
@@ -256,16 +307,12 @@ function PhoneShell({ children }: { children: ReactNode }) {
 export function FocusShell({ children }: { children: ReactNode }) {
   const { color } = useShell();
 
-  return (
-    <ScrollView style={{ flex: 1, backgroundColor: color.paper }} contentContainerStyle={{ flexGrow: 1 }}>
-      {children}
-    </ScrollView>
-  );
+  return <View style={{ flex: 1, backgroundColor: color.paper }}>{children}</View>;
 }
 
 const webPointer = Platform.OS === 'web' ? ({ cursor: 'pointer' } as object) : null;
 
-function createShellStyles(color: Palette, scheme: Scheme) {
+function createShellStyles(color: Palette) {
   return StyleSheet.create({
   frame: { flex: 1, flexDirection: 'row', backgroundColor: color.paper },
   content: { paddingTop: space.xl, paddingBottom: space.xxxl },
@@ -280,10 +327,6 @@ function createShellStyles(color: Palette, scheme: Scheme) {
     justifyContent: 'space-between',
     backgroundColor: color.paper,
   },
-  wordmark: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 8 },
-  mark: { width: 22, height: 22, borderRadius: 7, backgroundColor: color.ink, overflow: 'hidden', justifyContent: 'flex-end' },
-  markFill: { height: '46%', backgroundColor: color.money },
-  wordmarkText: { fontFamily: font.displayHeavy, fontWeight: weight.bold, fontSize: 18, letterSpacing: -0.4 },
   railLink: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, paddingRight: 10, ...webPointer },
   railPip: { width: 3, height: 18, borderRadius: 2 },
   railLabel: { fontFamily: font.medium, fontWeight: weight.medium, fontSize: 15, color: color.ink2, flex: 1 },
@@ -300,17 +343,9 @@ function createShellStyles(color: Palette, scheme: Scheme) {
   compactLink: { width: 68, alignItems: 'center', gap: 3, paddingVertical: 8, borderRadius: radius.md, ...webPointer },
   compactLabel: { fontFamily: font.medium, fontWeight: weight.medium, fontSize: 10, color: color.ink3 },
   phoneTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: space.md, paddingBottom: 4 },
-  tabDock: { position: 'absolute', left: 12, right: 12 },
-  tabBar: {
-    flexDirection: 'row',
-    backgroundColor: color.surface,
-    borderRadius: 22,
-    paddingVertical: 6,
-    paddingHorizontal: 4,
-    boxShadow: scheme === 'dark' ? '0 16px 40px rgba(0,0,0,0.45)' : '0 10px 28px rgba(28,27,25,0.12)',
-  },
-  tab: { flex: 1, alignItems: 'center', gap: 2, paddingVertical: 2, ...webPointer },
-  tabIcon: { width: 44, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  tabLabel: { fontFamily: font.medium, fontWeight: weight.medium, fontSize: 10, color: color.ink3 },
+  tabDock: { position: 'absolute', left: 16, right: 16 },
+  tabBar: { flexDirection: 'row', alignItems: 'stretch', borderRadius: 32, padding: 4 },
+  tab: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 2, paddingVertical: 6, borderRadius: 26, ...webPointer },
+  tabLabel: { fontFamily: font.medium, fontWeight: weight.medium, fontSize: 10, lineHeight: 12, color: color.ink3 },
   });
 }

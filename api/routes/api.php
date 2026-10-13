@@ -46,10 +46,15 @@ Route::prefix('v1')->group(function () {
         Route::post('/sell/items/listed', [SellItemController::class, 'storeListed']);
         Route::get('/sell/items/{item}', [SellItemController::class, 'show']);
         Route::patch('/sell/items/{item}', [SellItemController::class, 'update']);
+        Route::delete('/sell/items/{item}', [SellItemController::class, 'destroy']);
         Route::post('/sell/items/{item}/finish', [SellItemController::class, 'finish']);
         Route::post('/sell/items/{item}/photos', [SellItemController::class, 'storePhoto']);
         Route::post('/sell/items/{item}/photos/reorder', [SellItemController::class, 'reorderPhotos']);
         Route::delete('/sell/items/{item}/photos/{photo}', [SellItemController::class, 'destroyPhoto']);
+        Route::post('/sell/items/{item}/photos/{photo}/edit', [SellItemController::class, 'storePhotoEdit']);
+        Route::post('/sell/items/{item}/photos/{photo}/background', [SellItemController::class, 'recolorPhoto']);
+        Route::delete('/sell/items/{item}/photos/{photo}/edit', [SellItemController::class, 'destroyPhotoEdit']);
+        Route::post('/sell/items/{item}/collages', [SellItemController::class, 'storeCollage']);
         Route::post('/sell/items/{item}/photos/{photo}/cover', [SellItemController::class, 'cover']);
         Route::post('/sell/items/{item}/comparables', [SellItemController::class, 'storeComparable']);
         Route::delete('/sell/items/{item}/comparables/{comparable}', [SellItemController::class, 'destroyComparable']);

@@ -21,6 +21,7 @@ RUN composer dump-autoload --optimize --no-dev \
     && mkdir -p storage/app/public storage/framework/cache storage/framework/sessions storage/framework/views storage/logs bootstrap/cache database \
     && chown -R www-data:www-data storage bootstrap/cache database
 
+COPY deploy/uploads.ini /usr/local/etc/php/conf.d/uploads.ini
 COPY deploy/nginx-api.conf /etc/nginx/sites-available/default
 RUN ln -sf /etc/nginx/sites-available/default /etc/nginx/sites-enabled/default \
     && rm -f /etc/nginx/sites-enabled/default.conf /etc/nginx/conf.d/default.conf

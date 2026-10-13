@@ -15,11 +15,14 @@ use Illuminate\Support\Facades\Storage;
     'user_id',
     'opportunity_id',
     'name',
+    'listing_title',
     'category',
     'subcategory',
     'brand',
     'condition',
     'details',
+    'listing_description',
+    'skipped_shots',
     'value_min_minor',
     'value_max_minor',
     'value_confidence',
@@ -32,7 +35,7 @@ class SellItem extends Model
     /** @use HasFactory<SellItemFactory> */
     use HasFactory;
 
-    public const STEPS = ['identity', 'photos', 'details', 'research', 'estimate', 'done'];
+    public const STEPS = ['identity', 'photos', 'details', 'research', 'estimate', 'description', 'done'];
 
     protected static function booted(): void
     {
@@ -52,6 +55,7 @@ class SellItem extends Model
     {
         return [
             'details' => 'array',
+            'skipped_shots' => 'array',
             'value_min_minor' => 'integer',
             'value_max_minor' => 'integer',
         ];
@@ -132,13 +136,37 @@ class SellItem extends Model
 
     public function nextStepLabel(): string
     {
+        if ($this->setup_step === 'photos') {
+            $nextPhoto = $this->nextPhotoTitle();
+
+            if ($nextPhoto !== null) {
+                return $nextPhoto;
+            }
+        }
+
         return match ($this->setup_step) {
             'identity' => 'Name it',
             'photos' => 'Add photos',
             'details' => 'Add details',
             'research' => 'Add similar sales',
             'estimate' => 'Estimate value',
-            default => 'Prepare the listing',
+            'description' => 'Write the listing',
+            default => 'Ready to list',
         };
+    }
+
+    /** The next recommended shot that does not have a photo yet. */
+    private function nextPhotoTitle(): ?string
+    {
+        $taken = $this->photos->pluck('shot_key')->filter()->all();
+        $skipped = $this->skipped_shots ?? [];
+
+        foreach (SellCatalog::plan($this->category, $this->subcategory) as $shot) {
+            if ($shot['recommended'] && ! in_array($shot['key'], $taken, true) && ! in_array($shot['key'], $skipped, true)) {
+                return $shot['title'];
+            }
+        }
+
+        return null;
     }
 }

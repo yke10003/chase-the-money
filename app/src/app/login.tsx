@@ -42,6 +42,7 @@ export default function LoginScreen() {
         <Button label="Sign in" size="lg" full busy={busy} disabled={!email || !password} onPress={submit} />
       </View>
       <LinkButton label="New here? Create an account" icon="arrowRight" onPress={() => router.push('/register')} />
+      {__DEV__ ? <LinkButton label="Bloom preview" onPress={() => router.push('/bloom-preview')} /> : null}
     </AuthFrame>
   );
 }

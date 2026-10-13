@@ -1,6 +1,7 @@
 import { useMemo, type ReactNode } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { BrandMark } from '@/components/brand';
 import { CertaintySwatch, T } from '@/components/ui';
 import { useLayout } from '@/design/layout';
 import type { Palette, Scheme } from '@/design/palette';
@@ -19,14 +20,16 @@ export function AuthFrame({ title, lead, children }: { title: string; lead: stri
   const layout = useLayout();
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: color.paper }} contentContainerStyle={{ flexGrow: 1, flexDirection: layout.desktop ? 'row' : 'column' }}>
+    <ScrollView
+      style={{ flex: 1, backgroundColor: color.paper }}
+      contentContainerStyle={{ flexGrow: 1, flexDirection: layout.desktop ? 'row' : 'column' }}
+      keyboardShouldPersistTaps="handled"
+      automaticallyAdjustKeyboardInsets
+    >
       {layout.desktop ? (
         <View style={styles.side}>
-          <View style={styles.wordmark}>
-            <View style={styles.mark}>
-              <View style={styles.markFill} />
-            </View>
-            <Text style={styles.wordmarkText}>Nolume</Text>
+          <View style={{ alignItems: 'center' }}>
+            <BrandMark color="#F4F1EA" stacked bloomScheme="dark" />
           </View>
           <View style={{ gap: space.xl, maxWidth: 460 }}>
             <Text style={styles.manifesto}>Pick a move. Make progress.</Text>
@@ -53,11 +56,8 @@ export function AuthFrame({ title, lead, children }: { title: string; lead: stri
       <View style={[styles.main, { padding: layout.phone ? space.lg : space.xxl }]}>
         <View style={{ width: '100%', maxWidth: 400, gap: space.lg }}>
           {layout.desktop ? null : (
-            <View style={[styles.wordmark, { marginBottom: space.md }]}>
-              <View style={styles.mark}>
-                <View style={styles.markFill} />
-              </View>
-              <Text style={[styles.wordmarkText, { color: color.ink }]}>Nolume</Text>
+            <View style={{ alignItems: 'center', marginBottom: space.sm }}>
+              <BrandMark color={color.ink} stacked bloomScheme={scheme} />
             </View>
           )}
           <View style={{ gap: space.xs }}>
@@ -72,15 +72,11 @@ export function AuthFrame({ title, lead, children }: { title: string; lead: stri
 }
 
 function createStyles(color: Palette, scheme: Scheme) {
-  const poster = scheme === 'dark' ? '#101218' : '#1C1B19';
+  const poster = scheme === 'dark' ? '#0F1D38' : '#1C1B19';
 
   return StyleSheet.create({
   side: { flex: 1.15, backgroundColor: poster, padding: space.xxl, justifyContent: 'space-between', gap: space.xxl },
   main: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  wordmark: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  mark: { width: 22, height: 22, borderRadius: 7, backgroundColor: color.ink, overflow: 'hidden', justifyContent: 'flex-end' },
-  markFill: { height: '46%', backgroundColor: color.money },
-  wordmarkText: { fontFamily: font.displayHeavy, fontWeight: weight.bold, fontSize: 18, letterSpacing: -0.4, color: '#F4F1EA' },
   manifesto: { fontFamily: font.displayHeavy, fontWeight: weight.bold, fontSize: 48, lineHeight: 52, letterSpacing: -1.1, color: '#F4F1EA' },
   layer: { flexDirection: 'row', gap: space.sm, alignItems: 'flex-start' },
   swatchWrap: { width: 26, height: 26, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.08)', alignItems: 'center', justifyContent: 'center' },

@@ -1,7 +1,9 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { createContext, useContext, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { Platform } from 'react-native';
 
 import { deleteAccount as deleteAccountRequest, getMe, login as loginRequest, logout as logoutRequest, register as registerRequest } from '@/api/endpoints';
+import { loadToken, setToken } from '@/api/client';
 import type { User } from '@/api/types';
 
 type AuthContextValue = {
@@ -17,22 +19,35 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
+  const [ready, setReady] = useState(Platform.OS === 'web');
   const me = useQuery({
     queryKey: ['me'],
     queryFn: getMe,
+    enabled: ready,
   });
+
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      return;
+    }
+
+    loadToken().finally(() => setReady(true));
+  }, []);
 
   async function login(email: string, password: string) {
     const response = await loginRequest({ email, password });
+    await setToken(response.token ?? null);
     queryClient.setQueryData(['me'], response.data);
   }
 
   async function register(input: { name: string; email: string; password: string; password_confirmation: string }) {
     const response = await registerRequest(input);
+    await setToken(response.token ?? null);
     queryClient.setQueryData(['me'], response.data);
   }
 
   function clearLocalSession() {
+    void setToken(null);
     queryClient.setQueryData(['me'], null);
     queryClient.removeQueries({
       predicate: (query) => query.queryKey[0] !== 'me',
@@ -51,7 +66,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const value: AuthContextValue = {
     user: me.data ?? null,
-    loading: me.isLoading,
+    loading: !ready || me.isLoading,
     login,
     register,
     logout,

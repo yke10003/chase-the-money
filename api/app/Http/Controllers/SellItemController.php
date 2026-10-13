@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Domain\Sell\SellCatalog;
 use App\Domain\Sell\SellItemFlow;
+use App\Domain\Sell\StoreSellCollage;
+use App\Domain\Sell\StoreSellPhoto;
 use App\Http\Resources\SellItemResource;
 use App\Models\SellComparable;
 use App\Models\SellItem;
@@ -86,6 +88,13 @@ class SellItemController extends Controller
             'condition' => ['sometimes', 'nullable', 'string', 'max:40'],
             'details' => ['sometimes', 'array'],
             'details.*' => ['nullable', 'string', 'max:200'],
+            'listing_description' => ['sometimes', 'nullable', 'string', 'max:2000'],
+            'listing_title' => ['sometimes', 'nullable', 'string', 'max:160'],
+            'skipped_shots' => ['sometimes', 'array'],
+            'skipped_shots.*' => ['string', 'max:40'],
+            'value_min_minor' => ['sometimes', 'nullable', 'integer', 'min:0'],
+            'value_max_minor' => ['sometimes', 'nullable', 'integer', 'min:0'],
+            'value_confidence' => ['sometimes', 'nullable', Rule::in(['sure', 'rough'])],
             'advance' => ['sometimes', 'boolean'],
         ]);
         $flow->save($item, $input);
@@ -93,14 +102,20 @@ class SellItemController extends Controller
         return new SellItemResource($this->load($item));
     }
 
+    public function destroy(SellItemFlow $flow, SellItem $item): Response
+    {
+        $this->authorize('update', $item);
+        $flow->discardEmpty($item);
+
+        return response()->noContent();
+    }
+
     public function finish(Request $request, SellItemFlow $flow, SellItem $item): SellItemResource
     {
         $this->authorize('update', $item);
         $input = $request->validate([
-            'unknown' => ['sometimes', 'boolean'],
-            'value_min_minor' => ['nullable', 'integer', 'min:0'],
-            'value_max_minor' => ['nullable', 'integer', 'min:0'],
-            'value_confidence' => ['nullable', Rule::in(['sure', 'rough'])],
+            'listing_title' => ['nullable', 'string', 'max:160'],
+            'listing_description' => ['nullable', 'string', 'max:2000'],
         ]);
         $flow->finish($item, $input);
 
@@ -170,6 +185,88 @@ class SellItemController extends Controller
         return new SellItemResource($this->load($item));
     }
 
+    public function storePhotoEdit(Request $request, StoreSellPhoto $photos, SellItem $item, SellItemPhoto $photo): SellItemResource
+    {
+        $this->authorize('update', $item);
+        $this->ownedPhoto($item, $photo);
+
+        if ($photo->collage !== null) {
+            throw ValidationException::withMessages([
+                'photo' => 'Edit a collage from the collage screen.',
+            ]);
+        }
+
+        $input = $request->validate([
+            'photo' => ['required', 'file', 'max:12288'],
+            'background' => ['nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
+        ]);
+        $photos->storeEdit($photo, $input['photo'], $input['background'] ?? '#FFFFFF');
+
+        return new SellItemResource($this->load($item));
+    }
+
+    public function recolorPhoto(Request $request, StoreSellPhoto $photos, SellItem $item, SellItemPhoto $photo): SellItemResource
+    {
+        $this->authorize('update', $item);
+        $this->ownedPhoto($item, $photo);
+
+        if ($photo->collage !== null) {
+            throw ValidationException::withMessages([
+                'photo' => 'Edit a collage from the collage screen.',
+            ]);
+        }
+
+        $input = $request->validate([
+            'background' => ['required', 'regex:/^#[0-9A-Fa-f]{6}$/'],
+        ]);
+        $photos->recolor($photo, strtoupper($input['background']));
+
+        return new SellItemResource($this->load($item));
+    }
+
+    public function destroyPhotoEdit(StoreSellPhoto $photos, SellItem $item, SellItemPhoto $photo): SellItemResource
+    {
+        $this->authorize('update', $item);
+        $this->ownedPhoto($item, $photo);
+        $photos->clearEdit($photo);
+
+        return new SellItemResource($this->load($item));
+    }
+
+    public function storeCollage(Request $request, StoreSellCollage $collages, SellItem $item): SellItemResource
+    {
+        $this->authorize('update', $item);
+        $input = $request->validate([
+            'left_id' => ['required', 'integer'],
+            'top_id' => ['required', 'integer'],
+            'bottom_id' => ['required', 'integer'],
+            'left_zoom' => ['nullable', 'numeric', 'between:0.5,2'],
+            'top_zoom' => ['nullable', 'numeric', 'between:0.5,2'],
+            'bottom_zoom' => ['nullable', 'numeric', 'between:0.5,2'],
+            'background' => ['nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
+            'collage_id' => ['nullable', 'integer'],
+        ]);
+        $existing = null;
+
+        if ($input['collage_id'] ?? null) {
+            $existing = $item->photos()->whereKey($input['collage_id'])->first();
+
+            if ($existing === null || $existing->collage === null) {
+                throw ValidationException::withMessages([
+                    'collage_id' => 'That collage is not on this item.',
+                ]);
+            }
+        }
+
+        $collages($item, [
+            ['id' => (int) $input['left_id'], 'zoom' => $this->collageZoom($input['left_zoom'] ?? 1)],
+            ['id' => (int) $input['top_id'], 'zoom' => $this->collageZoom($input['top_zoom'] ?? 1)],
+            ['id' => (int) $input['bottom_id'], 'zoom' => $this->collageZoom($input['bottom_zoom'] ?? 1)],
+        ], $existing, strtoupper((string) ($input['background'] ?? '#FFFFFF')));
+
+        return new SellItemResource($this->load($item));
+    }
+
     public function storeComparable(Request $request, SellItemFlow $flow, SellItem $item): SellItemResource
     {
         $this->authorize('update', $item);
@@ -195,6 +292,13 @@ class SellItemController extends Controller
         $comparable->delete();
 
         return response()->noContent();
+    }
+
+    private function collageZoom(mixed $value): float
+    {
+        $zoom = is_numeric($value) ? (float) $value : 1.0;
+
+        return max(0.5, min(2.0, round($zoom, 2)));
     }
 
     private function load(SellItem $item): SellItem

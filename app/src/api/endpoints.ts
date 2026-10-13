@@ -1,4 +1,4 @@
-import { apiRequest, apiUpload } from '@/api/client';
+import { apiRequest, apiUpload, apiUploadFile } from '@/api/client';
 import { ApiError } from '@/lib/errors';
 import type {
   DiscoverView,
@@ -37,11 +37,11 @@ export function register(input: {
   email: string;
   password: string;
   password_confirmation: string;
-}): Promise<{ data: User }> {
+}): Promise<{ data: User; token?: string }> {
   return apiRequest('/v1/register', { method: 'POST', body: input });
 }
 
-export function login(input: { email: string; password: string }): Promise<{ data: User }> {
+export function login(input: { email: string; password: string }): Promise<{ data: User; token?: string }> {
   return apiRequest('/v1/login', { method: 'POST', body: input });
 }
 
@@ -283,6 +283,12 @@ export function updateSellItem(
     brand?: string | null;
     condition?: string | null;
     details?: Record<string, string>;
+    listing_description?: string | null;
+    listing_title?: string | null;
+    skipped_shots?: string[];
+    value_min_minor?: number | null;
+    value_max_minor?: number | null;
+    value_confidence?: 'sure' | 'rough' | null;
     advance?: boolean;
   },
 ): Promise<{ data: SellItemView }> {
@@ -292,17 +298,76 @@ export function updateSellItem(
 export function finishSellItem(
   id: number,
   input: {
-    unknown?: boolean;
-    value_min_minor?: number | null;
-    value_max_minor?: number | null;
-    value_confidence?: 'sure' | 'rough' | null;
+    listing_title?: string | null;
+    listing_description?: string | null;
   },
 ): Promise<{ data: SellItemView }> {
   return apiRequest(`/v1/sell/items/${id}/finish`, { method: 'POST', body: input });
 }
 
+export function discardSellItem(id: number): Promise<void> {
+  return apiRequest(`/v1/sell/items/${id}`, { method: 'DELETE' });
+}
+
 export function uploadSellPhoto(id: number, body: FormData): Promise<{ data: SellItemView }> {
   return apiUpload(`/v1/sell/items/${id}/photos`, body);
+}
+
+export function uploadSellPhotoFile(
+  id: number,
+  uri: string,
+  mimeType: string,
+  shotKey: string | null,
+): Promise<{ data: SellItemView }> {
+  const parameters: Record<string, string> = {};
+
+  if (shotKey) {
+    parameters.shot_key = shotKey;
+  }
+
+  return apiUploadFile(`/v1/sell/items/${id}/photos`, uri, {
+    fieldName: 'photo',
+    mimeType,
+    parameters,
+  });
+}
+
+export function uploadSellPhotoEdit(
+  itemId: number,
+  photoId: number,
+  uri: string,
+  background: string,
+  mimeType = 'image/png',
+): Promise<{ data: SellItemView }> {
+  return apiUploadFile(`/v1/sell/items/${itemId}/photos/${photoId}/edit`, uri, {
+    fieldName: 'photo',
+    mimeType,
+    parameters: { background },
+  });
+}
+
+export function recolorSellPhoto(itemId: number, photoId: number, background: string): Promise<{ data: SellItemView }> {
+  return apiRequest(`/v1/sell/items/${itemId}/photos/${photoId}/background`, { method: 'POST', body: { background } });
+}
+
+export function resetSellPhotoEdit(itemId: number, photoId: number): Promise<{ data: SellItemView }> {
+  return apiRequest(`/v1/sell/items/${itemId}/photos/${photoId}/edit`, { method: 'DELETE' });
+}
+
+export function saveSellCollage(
+  itemId: number,
+  input: {
+    left_id: number;
+    top_id: number;
+    bottom_id: number;
+    left_zoom?: number;
+    top_zoom?: number;
+    bottom_zoom?: number;
+    background?: string;
+    collage_id?: number;
+  },
+): Promise<{ data: SellItemView }> {
+  return apiRequest(`/v1/sell/items/${itemId}/collages`, { method: 'POST', body: input });
 }
 
 export function reorderSellPhotos(id: number, ids: number[]): Promise<{ data: SellItemView }> {

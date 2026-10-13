@@ -1,10 +1,13 @@
 import { useRouter } from 'expo-router';
 import { useState, type ReactNode } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Platform, Pressable, ScrollView, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { startPlaybook } from '@/api/endpoints';
+import { useCockpit, useCockpitBody } from '@/components/cockpit-context';
 import { Icon } from '@/components/icon';
 import { InlineError, PageHeader, T } from '@/components/ui';
+import { useLayout } from '@/design/layout';
 import { space } from '@/design/tokens';
 import { errorMessage } from '@/lib/errors';
 import { majorToMinor } from '@/lib/money';
@@ -61,8 +64,9 @@ export function CreateFrame({
   children: ReactNode;
 }) {
   const router = useRouter();
-
-  return (
+  const phone = useLayout().phone;
+  const insets = useSafeAreaInsets();
+  const body = (
     <View style={{ gap: space.lg, maxWidth: 720, width: '100%' }}>
       <Pressable accessibilityRole="button" onPress={() => router.push(backHref)} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start' }}>
         <Icon name="arrowLeft" size={16} color={accent} />
@@ -74,6 +78,24 @@ export function CreateFrame({
       </View>
     </View>
   );
+
+  const phoneBody = (
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingTop: insets.top + 8, paddingHorizontal: space.md, paddingBottom: 120 }} keyboardShouldPersistTaps="handled">
+      {body}
+    </ScrollView>
+  );
+  const cockpit = useCockpit();
+  useCockpitBody(cockpit && phone && Platform.OS === 'ios' ? phoneBody : null);
+
+  if (Platform.OS === 'ios' && phone && cockpit) {
+    return null;
+  }
+
+  if (Platform.OS === 'ios' && phone) {
+    return phoneBody;
+  }
+
+  return body;
 }
 
 export function FormError({ error }: { error: unknown }) {

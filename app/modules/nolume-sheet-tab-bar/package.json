@@ -1,0 +1,6 @@
+{
+  "name": "nolume-sheet-tab-bar",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Lifts the system tab bar into the Nolume cockpit sheet."
+}

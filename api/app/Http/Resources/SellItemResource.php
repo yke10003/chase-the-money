@@ -19,19 +19,23 @@ class SellItemResource extends JsonResource
     {
         $photos = $this->photos;
         $taken = $photos->pluck('shot_key')->filter()->all();
-        $plan = array_map(function (array $shot) use ($taken) {
+        $skipped = $this->skipped_shots ?? [];
+        $plan = array_map(function (array $shot) use ($taken, $skipped) {
             $shot['taken'] = in_array($shot['key'], $taken, true);
+            $shot['skipped'] = in_array($shot['key'], $skipped, true);
 
             return $shot;
         }, SellCatalog::plan($this->category, $this->subcategory));
         $playbook = $this->setupDone()
             ? app(SellPlaybook::class)->present($this->opportunity)
             : null;
+        $context = $this->opportunity->context ?? [];
 
         return [
             'id' => $this->id,
             'opportunity_id' => $this->opportunity_id,
             'name' => $this->name,
+            'listing_title' => $this->listing_title,
             'category' => $this->category,
             'category_label' => $this->categoryLabel(),
             'subcategory' => $this->subcategory,
@@ -40,6 +44,7 @@ class SellItemResource extends JsonResource
             'condition' => $this->condition,
             'condition_label' => $this->conditionLabel(),
             'details' => $this->details ?? [],
+            'listing_description' => $this->listing_description,
             'value_min_minor' => $this->value_min_minor,
             'value_max_minor' => $this->value_max_minor,
             'value_confidence' => $this->value_confidence,
@@ -56,9 +61,14 @@ class SellItemResource extends JsonResource
             'photos' => $photos->map(fn ($photo) => [
                 'id' => $photo->id,
                 'url' => $photo->url(),
+                'original_url' => $photo->originalUrl(),
                 'shot_key' => $photo->shot_key,
                 'sort_order' => $photo->sort_order,
                 'is_cover' => $photo->is_cover,
+                'has_edit' => $photo->edited_path !== null,
+                'background' => $photo->background,
+                'cutout_url' => $photo->cutoutUrl(),
+                'collage' => $photo->collage,
             ])->values(),
             'comparables' => $this->comparables->map(fn ($comparable) => [
                 'id' => $comparable->id,
@@ -70,8 +80,13 @@ class SellItemResource extends JsonResource
             ])->values(),
             'photo_plan' => $plan,
             'next' => $playbook['action'] ?? null,
-            'asking_price_minor' => ($this->opportunity->context ?? [])['asking_price_minor'] ?? null,
-            'listed_on' => ($this->opportunity->context ?? [])['listed_on'] ?? null,
+            'outcomes' => $playbook['outcomes'] ?? [],
+            'asking_price_minor' => ($context['asking_price_minor'] ?? null),
+            'listed_on' => $context['listed_on'] ?? null,
+            'listing_url' => $context['listing_url'] ?? null,
+            'offer_minor' => $context['offer_minor'] ?? null,
+            'agreed_amount_minor' => $this->opportunity->agreed_amount_minor,
+            'received_minor' => $this->opportunity->realizedMinor(),
         ];
     }
 }

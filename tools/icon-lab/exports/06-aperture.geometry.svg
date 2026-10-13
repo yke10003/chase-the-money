@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024" role="img">
+  <title>F. Aperture geometry</title>
+  <desc>Editable layout geometry only. Fills are flat palette colors. The glossy material is the sibling PNG, rendered by WebGPU shaders, and is not reconstructed here.</desc>
+  <rect width="1024" height="1024" fill="#12141a"/>
+  <ellipse cx="458.77" cy="261.59" rx="149.30" ry="64.14" fill="#8eb6ff" opacity="0.971" transform="rotate(-12.00 458.77 261.59)"/>
+  <ellipse cx="664.83" cy="326.13" rx="149.30" ry="64.14" fill="#2ec4b6" opacity="0.971" transform="rotate(39.43 664.83 326.13)"/>
+  <ellipse cx="767.97" cy="515.83" rx="149.30" ry="64.14" fill="#ff6d92" opacity="0.971" transform="rotate(90.86 767.97 515.83)"/>
+  <ellipse cx="659.21" cy="702.36" rx="149.30" ry="64.14" fill="#ffd15c" opacity="0.971" transform="rotate(142.29 659.21 702.36)"/>
+  <ellipse cx="451.31" cy="760.70" rx="149.30" ry="64.14" fill="#8eb6ff" opacity="0.971" transform="rotate(193.71 451.31 760.70)"/>
+  <ellipse cx="293.65" cy="613.15" rx="149.30" ry="64.14" fill="#2ec4b6" opacity="0.971" transform="rotate(245.14 293.65 613.15)"/>
+  <ellipse cx="283.04" cy="397.49" rx="149.30" ry="64.14" fill="#ff6d92" opacity="0.971" transform="rotate(296.57 283.04 397.49)"/>
+  <circle cx="512.00" cy="512.00" r="53.08" fill="#ffd15c" stroke="none" stroke-width="0" opacity="1.000"/>
+</svg>
