@@ -282,7 +282,8 @@ In `setModalViewControllers`, if the previous modal `isBeingDismissed`, the fini
 | Photo viewer | legacy item page | – |
 
 - React Native's Fabric `Modal` presents from `[self reactViewController]`. That is a view controller react-native-screens does not track. **[Code]**
-- A past device session observed the Message someone modal covering the tab bar and the cockpit sheet, so these do present over the cockpit. **[Code]** plus device observation.
+- **Device, 2026-10-14 (Stage 5):** the Freelance Message someone `Sheet` set `visible` but never reported `onShow` (`sheet.visible`, no `sheet.shown`). Fabric calls `onShow` from the present completion, and presents from the view controller of the nearest ancestor of the Modal's view. Rendered beside the page, that is the covered tab's controller, while the cockpit sheet is presented over it. Content passed to the cockpit as `below` is drawn inside the cockpit sheet itself, so the Modal presents from the sheet on screen, as the Product Detail editors do from their own screen. Freelance now renders both its sheets in `below`. Device-confirmed for Freelance on 2026-10-14. Sell's "Marketplaces" `Sheet` had the same fault (device log: `sheet.visible title=Marketplaces`, no `sheet.shown`) and is now rendered in `below` too.
+- An earlier note here said these Modals were seen covering the cockpit. That is not reproduced.
 - Message someone (and Start on a skill inside it) follows T9: on iOS the sheet closes, and `/opportunities/:id` is pushed from the `Sheet`'s `onDismiss`. Elsewhere it closes and pushes right away. Without this, `(app)` would present the mission modal while the RN `Modal` is still dismissing, and `setModalViewControllers` would hit the `beingDismissed` early return described under ScreenStack ownership.
 - Start a skill's "Edit" link pushes `/settings` while the sheet stays open. On iOS phone that presents the secondary modal above the RN `Modal`. **[Predicted]**, not checked on the device.
 
@@ -318,12 +319,12 @@ In `setModalViewControllers`, if the previous modal `isBeingDismissed`, the fini
 | `/sell/items/[id]`, `…/edit`, `…/collage` | static redirects in `app.json` to `/product/[id]` | – | Redirect (Stage 4) |
 | `/product/[id]` | `(app)` `fullScreenModal`, `dangerouslySingular` | `navigation.closeExperience()` (`back()`, or `dismissTo(origin)`) | Canonical, complete (Stage 4) |
 | `/product/[id]/photos`, `edit`, `collage` | `formSheet` in stack #3, pushes in stack #4 | `back()`, guarded while dirty | Complete (Stage 4) |
-| `/freelance`, `/recover` | tab | – | Complete |
-| `/freelance/new`, `/recover/new` | inside cockpit sheet (`CreateFrame`) | Back calls `push(backHref)`; done calls `replace(doneHref)` | Not a guided flow |
-| `/build`, `/build/new` | tab, cockpit | – | Placeholder |
-| `/opportunities/[id]` | `(secondary)` group: `fullScreenModal`, own stack | frame Close or Back; in-page links use `dismissTo` | Complete (Stage 2) |
+| `/create/freelance`, `/create/recover`, `/create/build` | `(app)` `fullScreenModal` (`creationOptions`), single screen, not cockpit content | Close and Finish go through `navigation.ts` (`closeExperience`, `finishCreation`) to the origin tab. A changed form asks Keep editing / Discard first (`useCreationExit`) | Complete (Stage 5). Build is a placeholder form |
+| `/freelance/new`, `/recover/new`, `/build/new` | static redirects in `app.json` to the routes above | – | Redirect (Stage 5) |
+| `/freelance`, `/recover`, `/build` | tab | – | Complete |
+| `/opportunities/[id]` | `(secondary)` group: `fullScreenModal`, own stack | frame Close or Back; area buttons use `dismissTo`; "Message someone else" uses `openTab` | Complete (Stage 2, 5) |
 | `/opportunities`, `/opportunities/new` | `(secondary)` group | frame Close or Back; area buttons and mode redirects use `dismissTo` | Complete (Stage 2) |
-| `/progress`, `/settings` | `(secondary)` group | frame Close or Back | Complete (Stage 2) |
+| `/progress`, `/settings` | `(secondary)` group, opened through `openSecondary` | frame Close or Back. Profile asks before dropping unsaved edits (one `useDiscardGuard` in `settings.tsx`) | Complete (Stage 2, 5) |
 | `/friends` | `(secondary)` group, desktop rail only | – | Placeholder |
 | `/discover` | redirect only, `dismissTo` the new home of the tool | – | Deferred |
 | System | image picker `OVER_FULL_SCREEN`, `Alert`, SwiftUI `Menu` | system | Aligned |
@@ -364,7 +365,7 @@ Predicted failure modes (experiment E9 confirms which one happens):
 - Whether the cover exists is derived from the pathname, the previous pathname and Sell stack snapshots, all hardcoded to Sell (`isSellCreationPath`, `readSellStack` looks for a route named `sell`).
 - A past session's logs showed `decideCreationCover` returning `present=false pop=true` on the first tap of a product. The route was popped and creation never appeared until a second tap.
 - The same pattern (`useCockpitBody`, `bodyRef`) renders every tab's content in one shared cockpit body. Components published this way run outside their own screen's route context, so `useLocalSearchParams` or `useIsFocused` inside them would read the wrong route.
-- **Stage 3** (done, device-accepted 2026-10-13): the creation portal and all its heuristics are gone. `SellJourney` renders in its own route and no longer publishes into the cockpit, including when its screen is hidden. `bodyRef`, `CockpitBody` and `useCockpitBody` stay for tab content and the Freelance and Recover `CreateFrame` (Stage 5).
+- **Stage 3** (done, device-accepted 2026-10-13): the creation portal and all its heuristics are gone. `SellJourney` renders in its own route and no longer publishes into the cockpit, including when its screen is hidden. `bodyRef`, `CockpitBody` and `useCockpitBody` stay for tab content. `CreateFrame` stopped publishing into the cockpit in Stage 5.
 
 **3. Shell remounts caused by wrapper switching.** **[Code]**
 
@@ -385,9 +386,9 @@ Predicted failure modes (experiment E9 confirms which one happens):
   - `feedback.tsx` ("again")
 - `replace(areaHref)` from `opportunities/[id].tsx` after delete, and `/opportunities/new?mode=` replaces, swap the current `(app)` route for a new `(tabs)`.
 - `router.replace('/product/:id')` in `sell/setup/[id].tsx` (the `setup_done` guard) replaces the existing `(tabs)` route. The stack becomes `[product]`, and Close falls back to `replace('/sell')`.
-- Inside area stacks, `CreateFrame` Back is `router.push(backHref)` and `usePlaybookStart` finishes with `router.replace(doneHref)`. Both leave duplicate `index` routes (`app/src/components/create-flow.tsx`).
+- Inside area stacks, `CreateFrame` Back was `router.push(backHref)` and `usePlaybookStart` finished with `router.replace(doneHref)`, both leaving duplicate `index` routes. Fixed in Stage 5 (below).
 - `StackClient` PUSH without `getId` or `dangerouslySingular` always creates a new route, so a double tap pushes two detail screens.
-- **Stage 2** (no duplicate `(tabs)` in the 2026-10-13 device session; the `dismissTo(tab)` paths themselves were not exercised there): the callers listed above (mission detail, All activity, Progress, feedback "again", `/opportunities/new?mode=`, `/discover`, the Product Detail close fallback) now use `dismissTo`. `POP_TO` finds the existing `(tabs)` by name, pops everything above it in one update, and passes the tab as `params.screen`. `NAVIGATE` would duplicate `(tabs)` too: StackRouter only reuses the *current* route by name unless `pop` is set. Both are asserted in `app-shell.test.ts`. Still open: `CreateFrame` and `usePlaybookStart` (Stage 5), and the web and iPad rail's `push` to tabs (off iOS phone, so no cockpit is duplicated). Stage 3 removed the Sell setup `replace('/product/:id')`.
+- **Stage 2** (no duplicate `(tabs)` in the 2026-10-13 device session; the `dismissTo(tab)` paths themselves were not exercised there): the callers listed above (mission detail, All activity, Progress, feedback "again", `/opportunities/new?mode=`, `/discover`, the Product Detail close fallback) now use `dismissTo`. `POP_TO` finds the existing `(tabs)` by name, pops everything above it in one update, and passes the tab as `params.screen`. `NAVIGATE` would duplicate `(tabs)` too: StackRouter only reuses the *current* route by name unless `pop` is set. Both are asserted in `app-shell.test.ts`. `CreateFrame` and `usePlaybookStart` were fixed in Stage 5. Still open: the web and iPad rail's `push` to tabs (off iOS phone, so no cockpit is duplicated). Stage 3 removed the Sell setup `replace('/product/:id')`.
 
 **5. Inconsistent navigation intentions.** **[Code]**
 
@@ -644,8 +645,9 @@ Not built yet; same convention as T7. `openProgress()` presents a `fullScreenMod
 1. `startPlaybook` succeeds and the mission id is known.
 2. The sheet closes (`visible=false`).
 3. The mission opens only after the React Native `Modal` reports `onDismiss` (iOS). This is a native completion event from the modal itself. On web it opens right away.
-4. Alternatively, Stage 5 moves the sheet to a router `formSheet` in the Freelance experience, which makes this an ordinary handoff.
-5. No same-tick close and push (current behaviour, E8).
+4. Stage 5 keeps the `Modal` and wraps the wait in `lib/sheet-handoff.ts` (`createSheetHandoff`): `run(action)` closes and parks the action, `dismissed()` (the `Modal`'s `onDismiss`) runs it once. The same helper serves "Later" to "Message someone", "Edit skills" to Profile and the sheet to the mission.
+5. No same-tick close and push (E8). No timers.
+6. "Message someone else" from a mission is a different handoff: `openTab('freelance', 'message')`. It does `dismissTo` Freelance, waits for the `(app)` stack to settle, then `setParams({ start: 'message' })`. The Freelance screen opens the sheet from that param and clears it, so a repeat request works. A push of the tab's own index would duplicate it in the tab's stack, so params are used.
 
 ### T10. Cold deep link → Detail → Close (native wait only for the fallback tab switch)
 
@@ -686,13 +688,15 @@ Stage 3 built the Sell creation part **[Code]**, in `app/src/lib/navigation.ts` 
 
 ```ts
 type MainTab = 'home' | 'sell' | 'freelance' | 'build' | 'recover';
-type CreationKind = 'sell' | 'sell-listed';
+type CreationKind = 'sell' | 'sell-listed' | 'freelance' | 'recover' | 'build';
 
 type Intent =
   | { type: 'startCreation'; kind: CreationKind }
   | { type: 'resumeCreation'; kind: 'sell'; itemId: number }
   | { type: 'openProduct'; itemId: number; origin?: MainTab }                                  // Stage 4. A Sell item id, never an opportunity id
   | { type: 'openMission'; missionId: number; sellItemId?: number | null; origin?: MainTab }   // Stage 4. A sellItemId opens Product Detail
+  | { type: 'openSecondary'; href: string }                                                    // Stage 5. Profile, Progress
+  | { type: 'openTab'; tab: MainTab; start?: string }                                          // Stage 5. Close what is open, show a tab, then set `start`
   | { type: 'finishCreation'; feedback?: string }
   | { type: 'closeExperience' };
 
@@ -1355,13 +1359,63 @@ Tests: 104 frontend tests (8 new in `app-shell.test.ts`: editors push inside sta
 
 ### Stage 5 — Other app sections
 
-- **Scope:**
-  - Freelance and Recover creation become `(app)/create/freelance` and `(app)/create/recover` sessions following 5.3, keeping today's single-step forms. `CreateFrame` Back and `usePlaybookStart` follow T4 and T3.
-  - Message someone follows T9.
-  - Build stays a placeholder, with routes declared per the conventions.
-  - Profile and Progress get nested stacks only when their sub-pages are designed (T7, T8). Do not invent pages.
-- **Acceptance:** Freelance and Recover create, finish and close journeys; journeys F and G.
+**Status: done, device-accepted 2026-10-14, except the flows listed as not run under "Stage 5 acceptance" below.** 150 frontend tests and `tsc` pass.
+
+- **Creation.** Freelance, Recover and Build creation are `(app)/create/{freelance,recover,build}.tsx`: root-owned `fullScreenModal`s (same `creationOptions` as Sell), declared in `(app)/_layout.tsx`. They keep their single-screen forms and business logic. Build stays a placeholder form. The old `/x/new` paths are redirects in `app.json` (they need a Metro restart to take effect).
+  - Start: `navigation.startCreation('freelance' | 'recover' | 'build')`, which pushes `/create/<kind>?origin=<tab>` once. A second tap, or a tap while any creation, mission or Profile page is open, is dropped. Over a Profile or custom-mission page it closes that page first.
+  - Close: `useCreationExit(dirty)` in `create-flow.tsx`. A changed form asks Keep editing / Discard from the Close button, an iOS swipe and Android back (`usePreventRemove`). Leaving is a state change first, and the coordinator close runs in an effect after the guard has stopped preventing.
+  - Finish: `usePlaybookStart(exit.finish)`. A failed request stays on the form with its input. Success goes through `finishCreation`: `back()` to the origin, or `dismissTo(origin)` when the tab underneath differs. Cold link with no origin falls back to the category tab.
+  - `CreateFrame` no longer publishes into the cockpit. It draws `GlassClose` on iOS phone and the old back link elsewhere.
+- **Missions.** Entry points use `openMission` with the origin of the tab they sit on (Home, Freelance, Recover). `NAVIGATE` repeated inside the `(secondary)` stack reuses the current route, so All activity rows and "Review a cost" do not add copies. Nothing replaces one native modal with another.
+- **Handoffs.** Message someone to mission, Later to Message, Edit skills to Profile: `sheet-handoff.ts` (T9). Feedback "again", mission "Message someone else": `openTab` (T9, point 6).
+- **Profile and Progress.** Opened with `openSecondary` (closes Product Detail first, ignored over creation or another secondary page). Profile has local tabs only, so there are no sub-pages. Each form reports its dirty state to one `useDiscardGuard` in `settings.tsx`. Hidden-but-mounted forms stay guarded, so a tab switch inside Profile does not drop a draft.
+- **Targeted back (found on device, fixed).** The coordinator's `back` was `router.back()`, an untargeted `GO_BACK`. React Navigation gives that to the deepest focused navigator first, so with Progress → All activity open it popped one page inside the `(secondary)` stack instead of removing the modal. The `(app)` stack did not change, UIKit sent no finish signal, and the plan stayed pending until the next Close. `appBackAction(root)` now returns `GO_BACK` with `target` set to the `(app)` navigator's state key (found under `__root`), and the layout dispatches it on the container. Ordinary Back inside secondary pages (the frame's Back, a swipe) is untouched, and the frame's Close was already targeted. Tests run the real coordinator over the real routers, with a dispatcher that models deepest-first bubbling and `target` (`app-shell.test.ts`).
+- **Tab sheets are cockpit sheet content (found on device, fixed).** The Freelance Message someone and Not tracked yet sheets and Sell's Marketplaces sheet are RN `Modal`s. Rendered beside the page they sat in the covered tab's view controller and never presented (`sheet.visible`, no `sheet.shown`). They are now rendered inside `below`, which is drawn in the cockpit sheet. See React Native Modals above. A structural test pins it (`app-shell.test.ts`).
+- **Coordinator additions.** `CreationKind` gains `freelance | recover | build`; intents `openSecondary` and `openTab`; step `setParams`; `isCreationRoute()`. Still one coordinator.
+- **Tests.** `navigation.test.ts` (creation kinds and origin fallbacks, `openSecondary`, `openTab`, double taps, aborted `openTab`, no plan replaces a modal), `app-shell.test.ts` (creation routes and redirects, Close and Finish over the same `(tabs)` key, `openTab` params, Progress to All activity to mission staying in one group, repeated `NAVIGATE` adds no copy), `sheet-handoff.test.ts`.
+- **Not testable without a device or React Native:** the Keep/Discard dialog sequence, `onDismiss` timing, the swipe on a creation modal, that the real expo-router `navigate` override dedupes a double tap on All activity rows, and Profile's dirty state wiring.
+- **Known limitations, not fixed:**
+  - Profile "Set a new goal" does `router.push('/onboarding')`. That swaps the `appWrapper` to `FocusShell` and remounts the app (onboarding is out of scope).
+  - Profile has no sub-pages. There are no Achievements, XP or milestone pages.
+  - All activity Sell rows open Product Detail through the coordinator, which closes the secondary modal first (Stage 4 behaviour).
+  - Mission "Back to Home" and "Back to this area" use `dismissTo` (explicit tab changes).
+  - `cockpit-scene.test.ts` still asserts the old `/x/new` cockpit paths. It is harmless.
+- **Acceptance:** device journeys K, N, O, P, Q (below), plus F, G and the `[nav]` log checks. Results below.
 - **Risk:** medium.
+
+#### Stage 5 acceptance — 2026-10-14
+
+iPhone, dev build, three sessions on 2026-10-14. The results below come from what was reported and from `[nav]` and API log lines. No full per-journey run was recorded.
+
+| Check | Evidence | Result |
+| --- | --- | --- |
+| Progress opens and closes from Sell | reported | **Pass** |
+| Progress → All activity → Recover mission: opens inside the secondary stack with Back and Close, X closes the whole group | reported | **Pass** |
+| Progress → All activity → Sell product (before the targeted-back fix) | reported: cockpit exposed, product opened late, Close went to Sell | **Failed.** Cause: untargeted `GO_BACK` popped a secondary page and left the plan pending. Fixed. |
+| Progress → All activity → Sell product (after the fix) | reported plus `[nav]`: the whole secondary group is dismissed, the coordinator waits for native completion, then Product Detail presents and closes cleanly. No duplicate-tab, stacked-modal or aborted-transition warnings. | **Pass** |
+| Freelance and Recover creation to the new mission | API log: `playbooks/freelance` at 13:46:10 then `opportunities/47`, `playbooks/recover_money` at 13:47:18 then `opportunities/48` | **Worked** (log). Close, Finish and Keep/Discard were not reported individually. |
+| Message someone sheet (hero button) | before the fix: `sheet.visible` and no `sheet.shown`. After moving the sheets into the cockpit content: reported | **Failed, then Pass** |
+| Message someone: Start the note → mission opens once | reported, plus API log (`playbooks/freelance` 14:32:20 and 14:32:42, then `opportunities/50` and `/51`) | **Pass** |
+| Message someone: start from a skill | reported | **Pass** |
+| Message someone: skills "Edit" opens Profile | reported | **Pass** |
+| Sell "Marketplaces aren't connected" | before the fix: `sheet.visible title=Marketplaces`, no `sheet.shown`, nothing shown | **Failed, then Pass.** Moved into the cockpit content in the same way, and re-run on the device: it opens. |
+
+Not run, or not reported. These are follow-ups, not verified:
+
+- Keep editing / Discard dialogs on the Freelance, Recover and Build creation forms (button, swipe, Android back), and a failed save on them.
+- Build creation (placeholder form) open and close.
+- Home-origin creation and mission returns for Freelance and Recover, and "Message someone else" from a mission (`openTab` with `setParams`), and feedback "again".
+- Profile's dirty-edit guard (Keep editing / Discard from Close, and a tab switch inside Profile).
+- A double tap on an All activity row and on Add a lead (covered by tests only).
+- The old `/freelance/new`, `/recover/new` and `/build/new` links (redirects, covered by tests only, and they need a Metro restart).
+- The web check of the new creation routes.
+- Journey F and G cockpit mount counts after Stage 5 (no `cockpit.mount count=2` was reported, but it was not specifically checked).
+
+**Follow-up: keep All activity as the return point for Sell products.** Opening a Sell row in All activity closes the whole secondary group and presents Product Detail over the tab, so Close returns to the tab and not to the list (Stage 4 handoff, still the design). The contract wants Progress → All activity → Product Detail → Back → All activity. Not implemented. Two options were compared:
+
+- **Product Detail as a child of the secondary group.** Needs a second route for the same page, a different base path for its root-relative Photos links, and a Photos form sheet inside a nested modal (never run). Double Close and Back chrome. Continue setup would work unchanged.
+- **Product Detail over the secondary modal in the `(app)` stack** (preferred). One route, Photos and editors unchanged, Close is the targeted `back()` and returns to the list with its state. It changes invariant I2 (one top-level experience), needs a three-step Continue setup plan (close product, close secondary, present creation), and must never run `dismissTo` while the product is stacked, because removing two modals in one update orphans a controller (E3).
+- **Experiment first.** A dev-only button on a Sell row in All activity pushes `/product/:id` directly. Check on the device: `(tabs)>secondary>product` in route state, no `native.cockpit.willAppear`, one `finishTransitioning`, Close returns to the same list and Back still reaches Progress, ten open and close cycles, swipe down and a double tap, Photos and Edit Photo over the stacked product, and `native.cockpit.didAppear` after closing both.
 
 ### Separate track — cockpit memory enhancement
 
@@ -1400,6 +1454,10 @@ Acceptance journeys. Every one needs the device. The plan for each is automatabl
 | K | Freelance, Message someone, start | The sheet finishes dismissing, then the mission opens. |
 | L | Cold start from `sidehustle://product/:id`, then Close | Cockpit underneath, then the Sell tab. |
 | M | Double-tap a Sell board card, and Continue setup | One presentation. |
+| N | Freelance, Add a lead, fill a field, Close, Keep editing, Close, Discard | Dialog both ways. Back on Freelance, one `(tabs)`. Same for Recover. |
+| O | Freelance, Add a lead, Finish, then open the new mission, Close | Finish returns to Freelance. The mission opens once, Close returns to the same tab. |
+| P | Mission, Message someone else | Mission closes, Freelance shows, the message sheet opens once. Repeat after closing it. |
+| Q | Profile, edit a field, Close | Keep editing / Discard. Skills Edit, Profile opens after the sheet is gone. |
 
 For each journey, check: one `CockpitShell` mount, one `(tabs)` route, the tab bar lifted again after every Close, and no `[nav]` warnings.
 
@@ -1423,10 +1481,10 @@ For each journey, check: one `CockpitShell` mount, one `(tabs)` route, the tab b
 | Cockpit | `app/src/components/cockpit-shell.tsx` (`CockpitShell`, `AreaStack`), `menu-sheet.tsx` (`MenuSheet`), `cockpit-context.tsx`, `score-hero.tsx` (`ScoreHeroView`, `MobileStage`), `hero-wash-host.tsx` (`NativeTabWash`, `HeroWashSlot`), `app/src/lib/cockpit-scene.ts` |
 | Swift lift | `app/modules/nolume-sheet-tab-bar/ios/NolumeSheetTabBar.swift`, `NolumeSheetTabBarSubscriber.swift` |
 | Shell | `app/src/lib/app-shell.ts` (`appWrapper`, `secondaryPresentation`), `app/src/components/shell.tsx` (`AppShell`, `FocusShell`), `moves.tsx` (`Sheet`, `CockpitFrame`) |
-| Navigation | `app/src/lib/navigation.ts` (coordinator), `app/src/lib/nav-log.ts` (dev logging), `app/src/lib/discard.ts` and `use-discard-guard.ts` (unsaved-change guard), `app/app.json` (`expo-router` redirects) |
+| Navigation | `app/src/lib/navigation.ts` (coordinator), `app/src/lib/sheet-handoff.ts` (sheet to presentation handoff), `app/src/lib/nav-log.ts` (dev logging), `app/src/lib/discard.ts` and `use-discard-guard.ts` (unsaved-change guard), `app/app.json` (`expo-router` redirects) |
 | Sell | `(tabs)/sell/index.tsx`, `(app)/create/sell/_layout.tsx`, `new.tsx`, `listed.tsx`, `setup/[id].tsx`, `app/src/components/sell-flow.tsx`, `app/src/lib/sell-cache.ts` |
 | Product | `product/[id]/index.tsx`, `photos/*`, `app/src/components/product-page.tsx`, `editing-sheet.tsx`, `app/src/lib/product-detail.ts` |
-| Missions and areas | `(tabs)/index.tsx`, `freelance/*`, `recover/*`, `build/*`, `opportunities/*`, `app/src/components/create-flow.tsx`, `feedback.tsx` |
+| Missions and areas | `(tabs)/index.tsx`, `freelance/*`, `recover/*`, `build/*`, `opportunities/*`, `(app)/create/{freelance,recover,build}.tsx`, `app/src/components/create-flow.tsx` (`useCreationExit`, `CreateFrame`), `feedback.tsx` |
 | Secondary | `(app)/(secondary)/_layout.tsx`, `settings.tsx`, `progress.tsx`, `friends.tsx`, `opportunities/*`; `(app)/discover.tsx` (redirect) |
-| Tests | `app/src/lib/navigation.test.ts`, `app-shell.test.ts`, `discard.test.ts`, `cockpit-scene.test.ts`, `sell.test.ts`, `product-detail.test.ts`; `api/tests/Feature/Api/OpportunitySellItemIdTest.php` |
+| Tests | `app/src/lib/navigation.test.ts`, `app-shell.test.ts`, `sheet-handoff.test.ts`, `discard.test.ts`, `cockpit-scene.test.ts`, `sell.test.ts`, `product-detail.test.ts`; `api/tests/Feature/Api/OpportunitySellItemIdTest.php` |
 | Library source | `node_modules/react-native-screens/ios/RNSScreenStack.mm`, `RNSScreen.mm`, `node_modules/expo-router/build/react-navigation/native-stack/views/NativeStackView.native.js`, `expo-router/build/global-state/getNavigationAction.js`, `routingQueue.js`, `layouts/StackClient.js`, `native-tabs/types.d.ts`, `react-native/React/Fabric/Mounting/ComponentViews/Modal/RCTModalHostViewComponentView.mm` |
