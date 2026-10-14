@@ -34,11 +34,14 @@ final class BuildHomeDashboard
         $currency = $goal?->currency ?? 'EUR';
 
         $opportunities = $user->opportunities()
-            ->with(['actions' => function ($query): void {
-                $query->where('status', ActionStatus::Open)
-                    ->orderBy('sort_order')
-                    ->orderBy('id');
-            }])
+            ->with([
+                'actions' => function ($query): void {
+                    $query->where('status', ActionStatus::Open)
+                        ->orderBy('sort_order')
+                        ->orderBy('id');
+                },
+                'sellItem',
+            ])
             ->get();
 
         $open = $opportunities

@@ -83,6 +83,39 @@ class Opportunity extends Model
     }
 
     /**
+     * The id the app opens as Product Detail (/product/{id}). It is a sell item id, never this opportunity's id.
+     *
+     * Null when there is no item, or when the item belongs to someone else (stale data).
+     * Uses the loaded relation when there is one. Without it, only the sell_item playbook has an item to look up,
+     * so every other mission skips the query.
+     */
+    public function sellItemId(): ?int
+    {
+        if ($this->playbook !== 'sell_item' && ! $this->relationLoaded('sellItem')) {
+            return null;
+        }
+
+        $item = $this->sellItem;
+
+        if ($item === null) {
+            return null;
+        }
+
+        if ($item->user_id !== $this->user_id) {
+            Log::warning('opportunity.sell_item.owner_mismatch', [
+                'opportunity_id' => $this->id,
+                'opportunity_user_id' => $this->user_id,
+                'sell_item_id' => $item->id,
+                'sell_item_user_id' => $item->user_id,
+            ]);
+
+            return null;
+        }
+
+        return $item->id;
+    }
+
+    /**
      * @return array<string, string>
      */
     protected function casts(): array

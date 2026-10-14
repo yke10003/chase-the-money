@@ -73,11 +73,14 @@ class OpportunityController extends Controller
         }
 
         $opportunities = $query
-            ->with(['actions' => function ($actions): void {
-                $actions->where('status', ActionStatus::Open)
-                    ->orderBy('sort_order')
-                    ->orderBy('id');
-            }])
+            ->with([
+                'actions' => function ($actions): void {
+                    $actions->where('status', ActionStatus::Open)
+                        ->orderBy('sort_order')
+                        ->orderBy('id');
+                },
+                'sellItem',
+            ])
             ->paginate(25)
             ->withQueryString();
 
@@ -101,6 +104,7 @@ class OpportunityController extends Controller
             'actions' => fn ($query) => $query->orderBy('sort_order')->orderBy('id'),
             'financialImpacts' => fn ($query) => $query->orderByDesc('occurred_at'),
             'xpEvents' => fn ($query) => $query->orderByDesc('occurred_at'),
+            'sellItem',
         ]);
 
         return new OpportunityDetailResource($opportunity);
