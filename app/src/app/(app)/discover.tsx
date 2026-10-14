@@ -110,6 +110,8 @@ function useStart(onStarted?: (id: number) => void) {
       if (onStarted) {
         onStarted(created.data.id);
       } else {
+        // Only Expenses gets here, inside All activity. A push stays in the (secondary) modal, and Back returns to the list.
+        // Callers on a tab pass onStarted, so the coordinator opens the mission.
         router.push(`/opportunities/${created.data.id}`);
       }
     } catch (caught) {
@@ -230,13 +232,15 @@ export function Skills({
   missions,
   bare = false,
   onStarted,
+  onEdit,
 }: {
   missions: Array<{ title: string; detail: string; current_state: string; area: string | null }>;
   bare?: boolean;
   /** Takes over opening the new mission, e.g. after a sheet has closed. */
   onStarted?: (id: number) => void;
+  /** Takes over opening Profile, e.g. after a sheet has closed. */
+  onEdit?: () => void;
 }) {
-  const router = useRouter();
   const catalog = useQuery({ queryKey: ['catalog'], queryFn: getCatalog });
   const profile = useQuery({ queryKey: ['profile'], queryFn: getProfile });
   const { start, busy, error } = useStart(onStarted);
@@ -255,7 +259,7 @@ export function Skills({
               <Text style={styles.skillPillText}>{skill}</Text>
             </View>
           ))}
-          <LinkButton label="Edit" icon="pencil" onPress={() => router.push('/settings?tab=profile')} />
+          <LinkButton label="Edit" icon="pencil" onPress={onEdit ?? (() => navigation.openSecondary('/settings?tab=profile'))} />
         </View>
       ) : null}
       {error ? <InlineError message={errorMessage(error)} /> : null}
@@ -291,13 +295,13 @@ export function Skills({
   return <Panel padding="xl" style={{ gap: space.lg }}>{body}</Panel>;
 }
 
-export function Recovery({ prompts }: { prompts: Array<{ kind: string; label: string }> }) {
+export function Recovery({ prompts, onStarted }: { prompts: Array<{ kind: string; label: string }>; onStarted?: (id: number) => void }) {
   const { styles } = useDiscoverUi();
   const [kind, setKind] = useState<string | null>(null);
   const [title, setTitle] = useState('');
   const [amount, setAmount] = useState('');
   const [date, setDate] = useState('');
-  const { start, busy, error, setError } = useStart();
+  const { start, busy, error, setError } = useStart(onStarted);
 
   async function track() {
     const name = title.trim();

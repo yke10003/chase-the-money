@@ -103,11 +103,17 @@ test('no plan replaces one top-level modal with another', () => {
     { ...idle, topLevel: { route: 'product/[id]', origin: null, id: null } },
     { ...idle, topLevel: { route: '(secondary)', origin: null, id: null } },
     { ...idle, topLevel: { route: 'create/sell', origin: 'home', id: null } },
+    { ...idle, topLevel: { route: 'create/freelance', origin: 'freelance', id: null } },
     { ...idle, tabUnderneath: null, nativeSettle: false },
   ];
   const intents = [
     { type: 'startCreation', kind: 'sell' },
     { type: 'startCreation', kind: 'sell-listed' },
+    { type: 'startCreation', kind: 'freelance' },
+    { type: 'startCreation', kind: 'recover' },
+    { type: 'startCreation', kind: 'build' },
+    { type: 'openSecondary', href: '/progress' },
+    { type: 'openTab', tab: 'freelance', start: 'message' },
     { type: 'resumeCreation', kind: 'sell', itemId: 1 },
     { type: 'openProduct', itemId: 5 },
     { type: 'openMission', missionId: 9 },
@@ -243,7 +249,13 @@ function harness(start: ReturnType<typeof root>) {
       const app = appStack(state);
       const [path, query] = href.split('?');
       const params: Record<string, unknown> = { origin: new URLSearchParams(query).get('origin') };
-      const name = path.startsWith('/product/') ? 'product/[id]' : path.startsWith('/opportunities/') ? '(secondary)' : 'create/sell';
+      const name = path.startsWith('/product/')
+        ? 'product/[id]'
+        : path.startsWith('/opportunities/') || path === '/settings' || path === '/progress'
+          ? '(secondary)'
+          : path.startsWith('/create/sell')
+            ? 'create/sell'
+            : path.slice(1);
 
       if (name === 'product/[id]') {
         params.id = path.split('/')[2];
@@ -253,6 +265,7 @@ function harness(start: ReturnType<typeof root>) {
       state = expoRoot({ index: app.routes.length, routes: [...app.routes, page] });
       nav.stateChanged();
     },
+    setParams: (params) => calls.push(`setParams ${JSON.stringify(params)}`),
     notify: (message) => calls.push(`toast ${message}`),
     log: (event) => logs.push(event),
     nativeSettle: true,
@@ -459,4 +472,115 @@ test('creation is left alone when a detail is requested', () => {
 
   assert.deepEqual(calls, []);
   assert.ok(logs.includes('intent.ignored'));
+});
+
+// ---- Stage 5 ----
+
+test('every creation kind presents its own route over the tab it started from, once', () => {
+  const kinds = [['freelance', 'create/freelance'], ['recover', 'create/recover'], ['build', 'create/build']] as const;
+
+  for (const [kind, route] of kinds) {
+    assert.deepEqual(ops(planTransition({ ...idle, tabUnderneath: 'home' }, { type: 'startCreation', kind })), [`push /${route}?origin=home`, `await ${route}`], kind);
+    assert.deepEqual(ops(planTransition({ ...idle, tabUnderneath: null }, { type: 'startCreation', kind })), [`push /${route}?origin=${kind}`, `await ${route}`], `${kind} cold`);
+    assert.deepEqual(ops(planTransition({ ...idle, topLevel: { route, origin: kind, id: null } }, { type: 'startCreation', kind })), ['ignore creation-open'], `${kind} open`);
+  }
+});
+
+test('creation never opens over another creation, and Sell and Freelance creation exclude each other', () => {
+  const sellOpen = { ...idle, topLevel: { route: 'create/sell', origin: 'sell' as const, id: null } };
+  const freelanceOpen = { ...idle, topLevel: { route: 'create/freelance', origin: 'freelance' as const, id: null } };
+
+  assert.deepEqual(ops(planTransition(sellOpen, { type: 'startCreation', kind: 'freelance' })), ['ignore creation-open']);
+  assert.deepEqual(ops(planTransition(freelanceOpen, { type: 'startCreation', kind: 'sell' })), ['ignore creation-open']);
+  assert.deepEqual(ops(planTransition(freelanceOpen, { type: 'openMission', missionId: 3 })), ['ignore creation-open']);
+  assert.deepEqual(ops(planTransition(freelanceOpen, { type: 'openSecondary', href: '/progress' })), ['ignore creation-open']);
+});
+
+test('closing or finishing a single-screen creation returns to its origin, then to its own category when there is none', () => {
+  const recover = { ...idle, tabUnderneath: 'recover' as const, topLevel: { route: 'create/recover', origin: 'recover' as const, id: null } };
+  const fromHome = { ...idle, tabUnderneath: 'recover' as const, topLevel: { route: 'create/recover', origin: 'home' as const, id: null } };
+  const cold = { ...idle, tabUnderneath: 'home' as const, topLevel: { route: 'create/freelance', origin: null, id: null } };
+
+  assert.deepEqual(ops(planTransition(recover, { type: 'finishCreation' })), ['back', 'await (tabs)']);
+  assert.deepEqual(ops(planTransition(fromHome, { type: 'finishCreation' })), ['dismissTo /', 'await (tabs)']);
+  assert.deepEqual(ops(planTransition(cold, { type: 'closeExperience' })), ['dismissTo /freelance', 'await (tabs)']);
+});
+
+test('web runs the creation steps back to back', () => {
+  const web = { ...idle, nativeSettle: false, tabUnderneath: 'freelance' as const };
+
+  assert.deepEqual(ops(planTransition(web, { type: 'startCreation', kind: 'freelance' })), ['push /create/freelance?origin=freelance']);
+  assert.deepEqual(ops(planTransition({ ...web, topLevel: { route: '(secondary)', origin: null, id: null } }, { type: 'openTab', tab: 'freelance', start: 'message' })), ['dismissTo /freelance?start=message']);
+});
+
+test('Profile and Progress: one push from a tab, close then present over another page, never over creation or themselves', () => {
+  assert.deepEqual(ops(planTransition(idle, { type: 'openSecondary', href: '/settings?tab=profile' })), ['push /settings?tab=profile', 'await (secondary)']);
+  assert.deepEqual(ops(planTransition({ ...idle, topLevel: { route: 'product/[id]', origin: null, id: '4' } }, { type: 'openSecondary', href: '/progress' })), [
+    'back',
+    'await (tabs)',
+    'push /progress',
+    'await (secondary)',
+  ]);
+  assert.deepEqual(ops(planTransition({ ...idle, topLevel: { route: '(secondary)', origin: null, id: null } }, { type: 'openSecondary', href: '/progress' })), ['ignore secondary-open']);
+  assert.deepEqual(ops(planTransition({ ...idle, pending: true }, { type: 'openSecondary', href: '/progress' })), ['ignore pending']);
+});
+
+test('opening a tab needs an open experience, and sets its start param only after the dismissal has finished', () => {
+  const mission = { ...idle, tabUnderneath: 'home' as const, topLevel: { route: '(secondary)', origin: 'home' as const, id: null } };
+
+  assert.deepEqual(ops(planTransition(idle, { type: 'openTab', tab: 'freelance', start: 'message' })), ['ignore nothing-open']);
+  assert.deepEqual(ops(planTransition(mission, { type: 'openTab', tab: 'freelance', start: 'message' })), ['dismissTo /freelance', 'await (tabs)', 'setParams']);
+  assert.deepEqual(ops(planTransition(mission, { type: 'openTab', tab: 'freelance' })), ['dismissTo /freelance', 'await (tabs)']);
+});
+
+test('Message someone else: the tab opens at once, the sheet request waits for UIKit, and a double tap runs once', () => {
+  const { nav, calls, logs } = harness(root('home', [{ name: '(secondary)', key: 'secondary-1', params: { origin: 'home' } }]));
+
+  nav.openTab('freelance', 'message');
+  nav.openTab('freelance', 'message');
+  assert.deepEqual(calls, ['dismissTo /freelance']);
+
+  nav.nativeSettled();
+  assert.deepEqual(calls, ['dismissTo /freelance', 'setParams {"start":"message"}']);
+  assert.ok(logs.includes('transition.dismiss.finished'));
+  assert.equal(logs.filter((line) => line === 'intent.ignored').length, 1);
+});
+
+test('Message someone to Mission detail: the mission is presented once, and a second request is dropped', () => {
+  const { nav, calls, logs } = harness(root('freelance'));
+
+  // The sheet's onDismiss calls this, after the sheet has gone (sheet-handoff.ts).
+  nav.openMission(77);
+  nav.openMission(77);
+  assert.deepEqual(calls, ['push /opportunities/77?origin=freelance']);
+
+  nav.nativeSettled();
+  assert.ok(logs.includes('detail.presented'));
+  assert.equal(logs.filter((line) => line === 'intent.ignored').length, 1);
+});
+
+test('Add a lead from Freelance: one presentation, and Finish closes to Freelance with no tab change', () => {
+  const { nav, calls, logs } = harness(root('freelance'));
+
+  nav.startCreation('freelance');
+  nav.startCreation('freelance');
+  assert.deepEqual(calls, ['push /create/freelance?origin=freelance']);
+
+  nav.nativeSettled();
+  assert.ok(logs.includes('creation.presented'));
+
+  nav.finishCreation();
+  nav.nativeSettled();
+  assert.deepEqual(calls, ['push /create/freelance?origin=freelance', 'back']);
+});
+
+test('if something else takes over while a tab is opening, its start param is not set', () => {
+  const { nav, calls, logs, setState } = harness(root('home', [{ name: '(secondary)', key: 'secondary-1' }]));
+
+  nav.openTab('freelance', 'message');
+  setState(root('home', [{ name: 'product/[id]', key: 'product-9', params: { id: '9' } }]));
+  nav.nativeSettled();
+
+  assert.deepEqual(calls, ['dismissTo /freelance']);
+  assert.ok(logs.includes('transition.aborted'));
 });

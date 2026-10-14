@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 
@@ -15,6 +15,7 @@ import { useTheme } from '@/state/theme';
 import { areaOf } from '@/lib/areas';
 import { errorMessage } from '@/lib/errors';
 import { formatAmount } from '@/lib/money';
+import { navigation } from '@/lib/navigation';
 import { attentionFor, missionGroup } from '@/lib/mission';
 
 export default function RecoverScreen() {
@@ -22,7 +23,6 @@ export default function RecoverScreen() {
   const layout = useLayout();
   const paint = accent.recover;
   const params = useLocalSearchParams<{ start?: string }>();
-  const router = useRouter();
   const [finding, setFinding] = useState(params.start === 'find');
   const list = useQuery({ queryKey: ['opportunities', 'all'], queryFn: () => listAllOpportunities() });
   const goal = useQuery({ queryKey: ['goal', 'current'], queryFn: getCurrentGoal });
@@ -65,7 +65,7 @@ export default function RecoverScreen() {
           ]}
           series={progress.data?.data.series}
           actions={[
-            { label: 'Add expected money', icon: 'plus', onPress: () => router.push('/recover/new') },
+            { label: 'Add expected money', icon: 'plus', onPress: () => navigation.startCreation('recover') },
             { label: 'Find money', icon: 'search', onPress: () => setFinding((value) => !value) },
           ]}
         />
@@ -76,7 +76,7 @@ export default function RecoverScreen() {
             <T variant="eyebrow">Due</T>
             {open.length > 0 ? <AreaList missions={[...open].sort((a, b) => (a.next_action?.due_on ?? '9999').localeCompare(b.next_action?.due_on ?? '9999'))} /> : <T variant="body" color={color.ink2}>Nothing to collect yet.</T>}
           </View>
-          {finding ? (discover.data ? <Recovery prompts={discover.data.data.recovery_prompts} /> : <LoadingState label="Loading" />) : null}
+          {finding ? (discover.data ? <Recovery prompts={discover.data.data.recovery_prompts} onStarted={(id) => navigation.openMission(id)} /> : <LoadingState label="Loading" />) : null}
         </View>
       }
     />

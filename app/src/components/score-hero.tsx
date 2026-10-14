@@ -1,4 +1,3 @@
-import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -15,6 +14,7 @@ import type { Accent, Scheme } from '@/design/palette';
 import { font, space, weight } from '@/design/tokens';
 import { outsideActionsVisible, sheetCover } from '@/lib/cockpit-scene';
 import { useReduceMotion } from '@/lib/motion';
+import { navigation } from '@/lib/navigation';
 import { useTheme } from '@/state/theme';
 
 export const homePaint: Accent = {
@@ -104,7 +104,6 @@ export function ScoreHeroView({
   const phone = useLayout().phone;
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
-  const router = useRouter();
   const host = useHeroWashHost();
   const nativeSheet = phone && Platform.OS === 'ios';
   const heroRef = useRef<View>(null);
@@ -135,10 +134,10 @@ export function ScoreHeroView({
       {host ? null : <HeroWash paint={paint} wash={wash} />}
       {phone && Platform.OS === 'ios' && showOutside && !backdrop ? (
         <View style={{ position: 'absolute', top: insets.top + 8, right: 12, zIndex: 5, flexDirection: 'row', gap: 8 }}>
-          <Pressable accessibilityRole="link" accessibilityLabel="Progress" onPress={() => router.push('/progress')} style={styles.heroIcon}>
+          <Pressable accessibilityRole="link" accessibilityLabel="Progress" onPress={() => navigation.openSecondary('/progress')} style={styles.heroIcon}>
             <Icon name="chart" size={18} color="#F7F4EE" />
           </Pressable>
-          <Pressable accessibilityRole="link" accessibilityLabel="Profile" onPress={() => router.push('/settings')} style={styles.heroIcon}>
+          <Pressable accessibilityRole="link" accessibilityLabel="Profile" onPress={() => navigation.openSecondary('/settings')} style={styles.heroIcon}>
             <Icon name="user" size={18} color="#F7F4EE" />
           </Pressable>
         </View>
@@ -276,7 +275,6 @@ const styles = StyleSheet.create({
 
 /** Large page title, with the progress and profile buttons on the trailing edge. */
 function SheetHeading({ title }: { title: string }) {
-  const router = useRouter();
   const { color, scheme } = useTheme();
 
   return (
@@ -296,8 +294,8 @@ function SheetHeading({ title }: { title: string }) {
       >
         {title}
       </Text>
-      <SheetIconButton label="Progress" icon="chart" ink={color.ink} scheme={scheme} onPress={() => router.push('/progress')} />
-      <SheetIconButton label="Profile" icon="user" ink={color.ink} scheme={scheme} onPress={() => router.push('/settings')} />
+      <SheetIconButton label="Progress" icon="chart" ink={color.ink} scheme={scheme} onPress={() => navigation.openSecondary('/progress')} />
+      <SheetIconButton label="Profile" icon="user" ink={color.ink} scheme={scheme} onPress={() => navigation.openSecondary('/settings')} />
     </View>
   );
 }

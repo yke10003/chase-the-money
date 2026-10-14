@@ -152,7 +152,7 @@ function Detail({ opportunity }: { opportunity: OpportunityDetail }) {
               : finished && banked === 0
                 ? 'Closed.'
                 : null,
-        again: title === 'Done: Reach out' ? { label: 'Message someone else', href: '/freelance?start=message' } : null,
+        again: title === 'Done: Reach out' ? { label: 'Message someone else', tab: 'freelance', start: 'message' } : null,
       });
 
       return true;

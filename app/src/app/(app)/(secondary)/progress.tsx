@@ -94,7 +94,7 @@ export default function ProgressScreen() {
         <View style={{ flex: layout.twoColumn ? 1 : undefined, width: layout.twoColumn ? undefined : '100%', gap: space.lg }}>
           <GoalCard view={view} />
           <Effort view={view} />
-          <LinkButton label="All activity, including costs" icon="arrowRight" onPress={() => router.push('/opportunities')} />
+          <LinkButton label="All activity, including costs" icon="arrowRight" onPress={() => router.navigate('/opportunities')} />
         </View>
       </View>
     </View>

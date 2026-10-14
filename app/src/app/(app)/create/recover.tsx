@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { View } from 'react-native';
 
-import { CreateFrame, FormError, FormLead, readMoney, usePlaybookStart } from '@/components/create-flow';
+import { CreateFrame, FormError, FormLead, readMoney, useCreationExit, usePlaybookStart } from '@/components/create-flow';
 import { Button, DateField, Field, MoneyField, OptionCard } from '@/components/ui';
 import { space } from '@/design/tokens';
 import { useTheme } from '@/state/theme';
@@ -22,7 +22,10 @@ export default function RecoverNewScreen() {
   const [title, setTitle] = useState('');
   const [amount, setAmount] = useState('');
   const [expectedOn, setExpectedOn] = useState('');
-  const form = usePlaybookStart('/recover');
+  // The preselected kind alone is not input.
+  const dirty = [title, amount, expectedOn].some((value) => value.trim() !== '');
+  const exit = useCreationExit(dirty);
+  const form = usePlaybookStart(exit.finish);
 
   async function submit() {
     const name = title.trim();
@@ -48,7 +51,7 @@ export default function RecoverNewScreen() {
   }
 
   return (
-    <CreateFrame title="Add money to recover" lede="This stays in Recover." backHref="/recover" backLabel="Recover" accent={paint.from}>
+    <CreateFrame title="Add money to recover" lede="This stays in Recover." backLabel="Recover" onClose={exit.close} accent={paint.from}>
       <View style={{ gap: space.sm }}>
         <FormLead>What kind of money?</FormLead>
         {KINDS.map((option) => (

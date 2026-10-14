@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useLocalSearchParams } from 'expo-router';
+import { useNavigation, type NavigationProp, type ParamListBase } from 'expo-router/react-navigation';
+import { useEffect, useMemo, useState } from 'react';
 import { Platform, Pressable, Text, View } from 'react-native';
 
 import { getCurrentGoal, getDiscover, getProgress, listAllOpportunities, startPlaybook } from '@/api/endpoints';
@@ -19,6 +20,7 @@ import { formatAmount, formatAmountRange } from '@/lib/money';
 import { attentionFor, missionGroup } from '@/lib/mission';
 import { navRequest } from '@/lib/nav-log';
 import { navigation } from '@/lib/navigation';
+import { createSheetHandoff } from '@/lib/sheet-handoff';
 import { useRefreshProduct } from '@/state/query';
 import { useTheme } from '@/state/theme';
 
@@ -27,45 +29,22 @@ export default function FreelanceScreen() {
   const layout = useLayout();
   const paint = accent.earn;
   const params = useLocalSearchParams<{ start?: string }>();
-  const router = useRouter();
+  const screen = useNavigation<NavigationProp<ParamListBase>>();
   const list = useQuery({ queryKey: ['opportunities', 'all'], queryFn: () => listAllOpportunities() });
   const goal = useQuery({ queryKey: ['goal', 'current'], queryFn: getCurrentGoal });
   const week = useQuery({ queryKey: ['progress', '7d'], queryFn: () => getProgress('7d') });
   const progress = useQuery({ queryKey: ['progress', 'goal', 'earn'], queryFn: () => getProgress('goal', 'earn') });
   const [sheet, setSheet] = useState<'message' | 'later' | null>(params.start === 'message' || params.start === 'work' ? 'message' : null);
-  const pendingMission = useRef<number | null>(null);
-
-  function openStarted(id: number) {
-    // On iOS the mission modal cannot be presented while this sheet is still
-    // dismissing (navigation.md, T9), so it opens from the sheet's onDismiss.
-    if (Platform.OS !== 'ios') {
-      setSheet(null);
-      navigation.openMission(id);
-      return;
-    }
-
-    navRequest('freelance.sheet.handoff', { id });
-    pendingMission.current = id;
-    setSheet(null);
-  }
-
-  function sheetDismissed() {
-    const id = pendingMission.current;
-
-    if (id == null) {
-      return;
-    }
-
-    pendingMission.current = null;
-    navRequest('freelance.sheet.dismissed', { id });
-    navigation.openMission(id);
-  }
+  // Another presentation (a mission, Profile, the other sheet) opens only after the open sheet has finished dismissing (navigation.md, T9).
+  const handoff = useMemo(() => createSheetHandoff({ ios: Platform.OS === 'ios', close: () => setSheet(null), log: navRequest }), []);
 
   useEffect(() => {
     if (params.start === 'message' || params.start === 'work') {
       setSheet('message');
+      // Consumed. Left in place, the same request later (another "Message someone else") would not change the param, so it would not open.
+      screen.setParams({ start: undefined });
     }
-  }, [params.start]);
+  }, [params.start, screen]);
 
   if (list.isLoading) {
     return <LoadingState label="Loading your work" />;
@@ -107,7 +86,7 @@ export default function FreelanceScreen() {
             series={progress.data?.data.series}
             note={week.data && week.data.data.xp > 0 ? `+${week.data.data.xp} XP this week` : null}
             actions={[
-              { label: 'Add a lead', icon: 'plus', onPress: () => router.push('/freelance/new') },
+              { label: 'Add a lead', icon: 'plus', onPress: () => navigation.startCreation('freelance') },
               { label: 'Message someone', icon: 'chat', onPress: () => setSheet('message') },
             ]}
           />
@@ -136,17 +115,28 @@ export default function FreelanceScreen() {
                 <AreaList missions={custom} />
               </View>
             ) : null}
+            {/*
+              The sheets are part of the cockpit sheet's content, so React Native presents them from that
+              sheet's view controller. Rendered beside the page, they sit in the covered tab's controller,
+              which UIKit refuses to present from while the cockpit sheet is up (no `sheet.shown`).
+            */}
+            <MessageSheet
+              visible={sheet === 'message'}
+              onClose={() => setSheet(null)}
+              onStarted={(id) => handoff.run(() => navigation.openMission(id))}
+              onEditSkills={() => handoff.run(() => navigation.openSecondary('/settings?tab=profile'))}
+              onDismiss={handoff.dismissed}
+            />
+            <Sheet visible={sheet === 'later'} title="Not tracked yet" onClose={() => setSheet(null)} onDismiss={handoff.dismissed}>
+              <T variant="body" color={color.ink2}>
+                A public post and a cold note will live here. They aren’t a move you can finish in the app yet.
+              </T>
+              <T variant="body">One message to someone who already knows your work is ready now.</T>
+              <Button label="Message someone" iconRight="arrowRight" onPress={() => handoff.run(() => setSheet('message'))} />
+            </Sheet>
           </View>
         }
       />
-      <MessageSheet visible={sheet === 'message'} onClose={() => setSheet(null)} onStarted={openStarted} onDismiss={sheetDismissed} />
-      <Sheet visible={sheet === 'later'} title="Not tracked yet" onClose={() => setSheet(null)}>
-        <T variant="body" color={color.ink2}>
-          A public post and a cold note will live here. They aren’t a move you can finish in the app yet.
-        </T>
-        <T variant="body">One message to someone who already knows your work is ready now.</T>
-        <Button label="Message someone" iconRight="arrowRight" onPress={() => setSheet('message')} />
-      </Sheet>
     </>
   );
 }
@@ -186,11 +176,13 @@ function MessageSheet({
   visible,
   onClose,
   onStarted,
+  onEditSkills,
   onDismiss,
 }: {
   visible: boolean;
   onClose: () => void;
   onStarted: (id: number) => void;
+  onEditSkills: () => void;
   onDismiss: () => void;
 }) {
   const { color } = useTheme();
@@ -231,7 +223,7 @@ function MessageSheet({
       {discover.data ? (
         <View style={{ gap: space.sm, marginTop: space.sm }}>
           <T variant="eyebrow">Or start from a skill</T>
-          <Skills missions={discover.data.data.skill_missions} bare onStarted={onStarted} />
+          <Skills missions={discover.data.data.skill_missions} bare onStarted={onStarted} onEdit={onEditSkills} />
         </View>
       ) : null}
     </Sheet>

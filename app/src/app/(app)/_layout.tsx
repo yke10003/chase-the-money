@@ -13,7 +13,7 @@ import { space } from '@/design/tokens';
 import { appWrapper, secondaryPresentation } from '@/lib/app-shell';
 import { errorMessage } from '@/lib/errors';
 import { appFinishTransitioning, appScreenListeners, navLog, useRouteStateLog } from '@/lib/nav-log';
-import { navigation } from '@/lib/navigation';
+import { appBackAction, navigation } from '@/lib/navigation';
 import { useAuth } from '@/state/auth';
 import { useBoot } from '@/state/boot';
 import { useTheme } from '@/state/theme';
@@ -47,6 +47,11 @@ export default function AppLayout() {
   const settled = goal.isSuccess || goal.isError;
   const wrapper = appWrapper({ os: Platform.OS, phone, pathname });
   const topLevel = secondaryPresentation(Platform.OS, phone);
+  const creationOptions = {
+    presentation: topLevel.presentation,
+    animation: topLevel.animation,
+    contentStyle: { backgroundColor: topLevel.presentation === 'fullScreenModal' ? color.paper : 'transparent' },
+  } as const;
   const containerRef = useNavigationContainerRef();
   const feedback = useFeedback();
 
@@ -56,9 +61,20 @@ export default function AppLayout() {
   useLayoutEffect(() => {
     const detach = navigation.attach({
       getRootState: () => (containerRef.isReady() ? containerRef.getRootState() : undefined),
-      back: () => router.back(),
+      // Targeted at the (app) navigator: closing a top-level experience must not pop a page inside it.
+      back: () => {
+        const action = appBackAction(containerRef.isReady() ? containerRef.getRootState() : undefined);
+
+        if (action == null) {
+          router.back();
+          return;
+        }
+
+        containerRef.dispatch(action);
+      },
       push: (href) => router.push(href),
       dismissTo: (href) => router.dismissTo(href),
+      setParams: (params) => router.setParams(params),
       notify: (message) => feedback({ title: message }),
       log: navLog,
       nativeSettle: Platform.OS === 'ios',
@@ -136,14 +152,11 @@ export default function AppLayout() {
           contentStyle: { backgroundColor: topLevel.presentation === 'fullScreenModal' ? color.paper : 'transparent' },
         }}
       />
-      <Stack.Screen
-        name="create/sell"
-        options={{
-          presentation: topLevel.presentation,
-          animation: topLevel.animation,
-          contentStyle: { backgroundColor: topLevel.presentation === 'fullScreenModal' ? color.paper : 'transparent' },
-        }}
-      />
+      <Stack.Screen name="create/sell" options={creationOptions} />
+      {/* Single-screen creation forms. Same presentation as Sell creation, one route each. */}
+      <Stack.Screen name="create/freelance" options={creationOptions} />
+      <Stack.Screen name="create/recover" options={creationOptions} />
+      <Stack.Screen name="create/build" options={creationOptions} />
     </Stack>
   );
   const shell = wrapper === 'FocusShell' ? (

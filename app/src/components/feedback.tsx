@@ -1,12 +1,12 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
 
 import { Icon } from '@/components/icon';
 import type { Palette } from '@/design/palette';
 import { font, radius, space, weight } from '@/design/tokens';
 import { useReduceMotion } from '@/lib/motion';
+import { navigation, type MainTab } from '@/lib/navigation';
 import { useTheme } from '@/state/theme';
 
 export type Moment = {
@@ -15,7 +15,8 @@ export type Moment = {
   banked?: string | null;
   xp?: number | null;
   note?: string | null;
-  again?: { label: string; href: string } | null;
+  /** Closes the page the card is on, lands on `tab`, and gives it `start`. */
+  again?: { label: string; tab: MainTab; start?: string } | null;
 };
 
 const FeedbackContext = createContext<(moment: Moment) => void>(() => undefined);
@@ -42,7 +43,6 @@ function MomentCard({ moment, placement, onDone }: { moment: Moment; placement: 
   const insets = useSafeAreaInsets();
   const reduce = useReduceMotion();
   const enter = useRef(new Animated.Value(reduce ? 1 : 0)).current;
-  const router = useRouter();
 
   useEffect(() => {
     if (!reduce) {
@@ -96,7 +96,11 @@ function MomentCard({ moment, placement, onDone }: { moment: Moment; placement: 
             accessibilityRole="button"
             onPress={() => {
               onDone();
-              router.dismissTo(moment.again?.href ?? '/');
+
+              if (moment.again) {
+                // The coordinator waits for the page this card is on to finish dismissing before the tab opens its sheet.
+                navigation.openTab(moment.again.tab, moment.again.start);
+              }
             }}
             style={styles.again}
           >

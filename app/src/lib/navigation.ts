@@ -10,7 +10,7 @@
  */
 
 export type MainTab = 'home' | 'sell' | 'freelance' | 'build' | 'recover';
-export type CreationKind = 'sell' | 'sell-listed';
+export type CreationKind = 'sell' | 'sell-listed' | 'freelance' | 'recover' | 'build';
 
 export type Intent =
   | { type: 'startCreation'; kind: CreationKind }
@@ -20,7 +20,11 @@ export type Intent =
   /** A Sell mission with a known item opens that item's Product Detail instead (T6). */
   | { type: 'openMission'; missionId: number; sellItemId?: number | null; origin?: MainTab }
   | { type: 'finishCreation'; feedback?: string }
-  | { type: 'closeExperience' };
+  | { type: 'closeExperience' }
+  /** Profile, Progress or All activity from a tab (Stage 5). Not for moving between pages inside the (secondary) group. */
+  | { type: 'openSecondary'; href: string }
+  /** Closes the open experience, lands on `tab`, and optionally hands it a `start` param once the dismissal is done (Stage 5). */
+  | { type: 'openTab'; tab: MainTab; start?: string };
 
 export type NavSnapshot = {
   /** The tab selected under any top-level experience. */
@@ -37,6 +41,8 @@ export type Step =
   | { op: 'push'; href: string }
   | { op: 'back' }
   | { op: 'dismissTo'; href: string }
+  /** On the focused route, so only after a settle that has made the intended tab focused. */
+  | { op: 'setParams'; params: Record<string, string> }
   /** Wait for the (app) stack to finish, then check that `top` is the route on top. */
   | { op: 'awaitNativeSettle'; top: string }
   | { op: 'toast'; message: string }
@@ -76,13 +82,29 @@ export function tabHref(tab: MainTab): string {
   return TAB_HREFS[tab];
 }
 
+/** Every creation session is one (app) route. Sell's is a group with its own steps, the others are one screen. */
+const CREATION_CATEGORY: Record<string, MainTab> = {
+  'create/sell': 'sell',
+  'create/freelance': 'freelance',
+  'create/recover': 'recover',
+  'create/build': 'build',
+};
+
+export function isCreationRoute(route: string | undefined): boolean {
+  return route != null && route in CREATION_CATEGORY;
+}
+
+function creationRoute(kind: CreationKind): string {
+  return kind === 'sell-listed' ? SELL_CREATION_ROUTE : `create/${kind}`;
+}
+
 /** Where an experience returns when it was opened without an origin, such as a cold link. */
 function categoryTab(route: string): MainTab | null {
-  if (route === SELL_CREATION_ROUTE || route === PRODUCT_ROUTE) {
+  if (route === PRODUCT_ROUTE) {
     return 'sell';
   }
 
-  return null;
+  return CREATION_CATEGORY[route] ?? null;
 }
 
 function creationHref(intent: Extract<Intent, { type: 'startCreation' | 'resumeCreation' }>, origin: MainTab): string {
@@ -90,9 +112,13 @@ function creationHref(intent: Extract<Intent, { type: 'startCreation' | 'resumeC
     return `/create/sell/setup/${intent.itemId}?origin=${origin}`;
   }
 
-  const page = intent.kind === 'sell-listed' ? 'listed' : 'new';
+  if (intent.kind === 'sell' || intent.kind === 'sell-listed') {
+    const page = intent.kind === 'sell-listed' ? 'listed' : 'new';
 
-  return `/create/sell/${page}?origin=${origin}`;
+    return `/create/sell/${page}?origin=${origin}`;
+  }
+
+  return `/create/${intent.kind}?origin=${origin}`;
 }
 
 function productHref(itemId: number, origin: MainTab): string {
@@ -121,7 +147,7 @@ function planDetail(now: NavSnapshot, intent: Extract<Intent, { type: 'openProdu
   const product = sellItemId != null;
   const route = product ? PRODUCT_ROUTE : SECONDARY_ROUTE;
 
-  if (now.topLevel?.route === SELL_CREATION_ROUTE) {
+  if (isCreationRoute(now.topLevel?.route)) {
     return [{ op: 'ignore', reason: 'creation-open' }];
   }
 
@@ -142,6 +168,55 @@ function planDetail(now: NavSnapshot, intent: Extract<Intent, { type: 'openProdu
 }
 
 /**
+ * Profile, Progress and All activity share one (secondary) modal. From a tab it is one push. Another top-level
+ * page open means close it, wait, then push. Pages inside the group are the group's own pushes, never this intent.
+ */
+function planSecondary(now: NavSnapshot, intent: Extract<Intent, { type: 'openSecondary' }>): Step[] {
+  if (isCreationRoute(now.topLevel?.route)) {
+    return [{ op: 'ignore', reason: 'creation-open' }];
+  }
+
+  if (now.topLevel?.route === SECONDARY_ROUTE) {
+    return [{ op: 'ignore', reason: 'secondary-open' }];
+  }
+
+  const present = settled(now, SECONDARY_ROUTE, [{ op: 'push', href: intent.href }]);
+
+  if (!now.topLevel) {
+    return present;
+  }
+
+  return [...settled(now, TABS_ROUTE, [{ op: 'back' }]), ...present];
+}
+
+/**
+ * Leaves the open experience for a tab. One `dismissTo` removes the modal and selects the tab in one update.
+ * A `start` param is set only after UIKit has finished dismissing, because what it opens (a sheet) must not
+ * present while the modal is still leaving. It is `setParams` and not a push: pushing the tab's own index would add
+ * a second copy of it when that tab is already selected. Callers own any unsaved input in the experience they leave.
+ */
+function planTab(now: NavSnapshot, intent: Extract<Intent, { type: 'openTab' }>): Step[] {
+  if (!now.topLevel) {
+    return [{ op: 'ignore', reason: 'nothing-open' }];
+  }
+
+  const href = tabHref(intent.tab);
+
+  // Without native waits nothing can race, so the param rides on the dismissal itself.
+  if (!now.nativeSettle) {
+    return [{ op: 'dismissTo', href: intent.start ? `${href}?start=${encodeURIComponent(intent.start)}` : href }];
+  }
+
+  const steps = settled(now, TABS_ROUTE, [{ op: 'dismissTo', href }]);
+
+  if (intent.start) {
+    steps.push({ op: 'setParams', params: { start: intent.start } });
+  }
+
+  return steps;
+}
+
+/**
  * Pure. Every plan changes the (app) stack one modal at a time: a close, or a
  * push. It never replaces one top-level modal with another, because that loses
  * or orphans a native controller (navigation.md, E3).
@@ -152,13 +227,14 @@ export function planTransition(now: NavSnapshot, intent: Intent): Step[] {
   }
 
   if (intent.type === 'startCreation' || intent.type === 'resumeCreation') {
-    if (now.topLevel?.route === SELL_CREATION_ROUTE) {
+    if (isCreationRoute(now.topLevel?.route)) {
       return [{ op: 'ignore', reason: 'creation-open' }];
     }
 
+    const route = creationRoute(intent.type === 'resumeCreation' ? 'sell' : intent.kind);
     // Read now, while the experience that started this is still in route state.
-    const origin = now.topLevel?.origin ?? now.tabUnderneath ?? 'sell';
-    const present = settled(now, SELL_CREATION_ROUTE, [{ op: 'push', href: creationHref(intent, origin) }]);
+    const origin = now.topLevel?.origin ?? now.tabUnderneath ?? CREATION_CATEGORY[route];
+    const present = settled(now, route, [{ op: 'push', href: creationHref(intent, origin) }]);
 
     if (!now.topLevel) {
       return present;
@@ -170,6 +246,14 @@ export function planTransition(now: NavSnapshot, intent: Intent): Step[] {
 
   if (intent.type === 'openProduct' || intent.type === 'openMission') {
     return planDetail(now, intent);
+  }
+
+  if (intent.type === 'openSecondary') {
+    return planSecondary(now, intent);
+  }
+
+  if (intent.type === 'openTab') {
+    return planTab(now, intent);
   }
 
   if (!now.topLevel) {
@@ -190,7 +274,7 @@ export function planTransition(now: NavSnapshot, intent: Intent): Step[] {
 }
 
 type NavRoute = { name: string; key?: string; params?: Record<string, unknown>; state?: NavState };
-type NavState = { index?: number; routes?: NavRoute[] };
+type NavState = { key?: string; index?: number; routes?: NavRoute[] };
 
 // Expo Router mounts the root layout as the container's one `__root` route (ExpoRoot.js), so (app) is a level down.
 function appState(root: unknown): NavState | null {
@@ -205,6 +289,18 @@ function focusedRoute(state: NavState | null | undefined): NavRoute | null {
   const routes = state?.routes ?? [];
 
   return routes[state?.index ?? routes.length - 1] ?? null;
+}
+
+/**
+ * GO_BACK aimed at the (app) navigator. An untargeted `router.back()` goes to the deepest focused navigator first,
+ * so inside the (secondary) group it would pop one page instead of removing the modal (navigation.md, Stage 5).
+ * The coordinator's `back` always means "remove the top-level (app) route", so it names its navigator.
+ * Null before the (app) stack exists.
+ */
+export function appBackAction(root: unknown): { type: 'GO_BACK'; target: string } | null {
+  const key = appState(root)?.key;
+
+  return typeof key === 'string' ? { type: 'GO_BACK', target: key } : null;
 }
 
 /** The (app) route that is on top, or null before the (app) stack exists. */
@@ -267,6 +363,7 @@ export type NavigatorDeps = {
   back: () => void;
   push: (href: string) => void;
   dismissTo: (href: string) => void;
+  setParams: (params: Record<string, string>) => void;
   notify: (message: string) => void;
   log: (event: string, fields?: NavFields) => void;
   nativeSettle: boolean;
@@ -287,6 +384,14 @@ function describe(intent: Intent): NavFields {
 
   if (intent.type === 'openMission') {
     return { id: intent.missionId, sellItemId: intent.sellItemId, origin: intent.origin };
+  }
+
+  if (intent.type === 'openSecondary') {
+    return { href: intent.href };
+  }
+
+  if (intent.type === 'openTab') {
+    return { tab: intent.tab, start: intent.start };
   }
 
   return {};
@@ -343,6 +448,9 @@ export function createNavigator() {
       } else if (step.op === 'push') {
         current.log('transition.present.request', { href: step.href });
         current.push(step.href);
+      } else if (step.op === 'setParams') {
+        current.log('transition.setParams', step.params);
+        current.setParams(step.params);
       } else if (step.op === 'toast') {
         current.notify(step.message);
       } else {
@@ -421,7 +529,7 @@ export function createNavigator() {
 
         if (expected === TABS_ROUTE) {
           current.log('transition.dismiss.finished');
-        } else if (expected === SELL_CREATION_ROUTE) {
+        } else if (isCreationRoute(expected)) {
           current.log('creation.presented', { top: actual });
         } else {
           current.log('detail.presented', { top: actual });
@@ -456,6 +564,16 @@ export function createNavigator() {
 
     closeExperience() {
       go({ type: 'closeExperience' });
+    },
+
+    /** Profile, Progress or All activity, from outside the (secondary) group. */
+    openSecondary(href: string) {
+      go({ type: 'openSecondary', href });
+    },
+
+    /** Closes the open experience and lands on a tab. `start` is read by that tab (for example `message` on Freelance). */
+    openTab(tab: MainTab, start?: string) {
+      go({ type: 'openTab', tab, start });
     },
 
     /** Product Detail for a Sell item. The id is the item's own id. */

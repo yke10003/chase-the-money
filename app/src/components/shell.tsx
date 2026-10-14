@@ -39,7 +39,7 @@ export function isCockpitRoot(pathname: string): boolean {
 }
 
 function isSellFocus(pathname: string): boolean {
-  return pathname.startsWith('/create/sell');
+  return pathname.startsWith('/create/');
 }
 
 function useShell() {

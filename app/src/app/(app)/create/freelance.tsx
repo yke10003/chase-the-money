@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { View } from 'react-native';
 
-import { CreateFrame, FormError, FormLead, readMoney, usePlaybookStart } from '@/components/create-flow';
+import { CreateFrame, FormError, FormLead, readMoney, useCreationExit, usePlaybookStart } from '@/components/create-flow';
 import { Button, DateField, Field, MoneyField, OptionCard } from '@/components/ui';
 import { useLayout } from '@/design/layout';
 import { space } from '@/design/tokens';
@@ -28,7 +28,10 @@ export default function FreelanceNewScreen() {
   const [invoiceAmount, setInvoiceAmount] = useState('');
   const [followUp, setFollowUp] = useState(addDaysIso(7));
   const [paymentDue, setPaymentDue] = useState(addDaysIso(14));
-  const form = usePlaybookStart('/freelance');
+  // Typed text and amounts count. The preselected state and the default dates alone do not.
+  const dirty = [title, quoted, agreed, invoiceAmount].some((value) => value.trim() !== '');
+  const exit = useCreationExit(dirty);
+  const form = usePlaybookStart(exit.finish);
 
   async function submit() {
     const name = title.trim();
@@ -89,7 +92,7 @@ export default function FreelanceNewScreen() {
   }
 
   return (
-    <CreateFrame title="Add a lead" lede="This stays in Freelance." backHref="/freelance" backLabel="Freelance" accent={paint.from}>
+    <CreateFrame title="Add a lead" lede="This stays in Freelance." backLabel="Freelance" onClose={exit.close} accent={paint.from}>
       <Field label="Client, company, or project" value={title} onChangeText={setTitle} placeholder="Website rebuild for Studio K" />
       <View style={{ gap: space.sm }}>
         <FormLead>Where are you with it?</FormLead>

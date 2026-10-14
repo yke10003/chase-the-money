@@ -13,6 +13,7 @@ import type { Accent, Palette } from '@/design/palette';
 import { font, radius, space, weight } from '@/design/tokens';
 import { goalDaysLeft, goalPeriodName } from '@/lib/goal';
 import { useReduceMotion } from '@/lib/motion';
+import { navLog } from '@/lib/nav-log';
 import { formatAmount } from '@/lib/money';
 import { cardShadow, useTheme } from '@/state/theme';
 
@@ -406,8 +407,20 @@ export function Sheet({
   const layout = useLayout();
   const insets = useSafeAreaInsets();
 
+  // Dev log: `sheet.visible` without a following `sheet.shown` means UIKit never presented the Modal.
+  useEffect(() => {
+    navLog('sheet.visible', { title, visible });
+  }, [title, visible]);
+
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose} onDismiss={onDismiss}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+      onShow={() => navLog('sheet.shown', { title })}
+      onDismiss={onDismiss}
+    >
       <View style={[styles.sheetHost, layout.desktop && styles.sheetHostDesktop]}>
         <Pressable accessibilityLabel="Close" style={StyleSheet.absoluteFill} onPress={onClose} />
         <View style={[styles.sheet, layout.desktop && styles.sheetDesktop, { paddingBottom: Math.max(insets.bottom, space.lg) }]}>

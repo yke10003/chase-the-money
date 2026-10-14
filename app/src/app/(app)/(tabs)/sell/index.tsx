@@ -109,13 +109,14 @@ export default function SellScreen() {
             />
             <ActionRow title="Already listed" detail="It’s on a marketplace. Track it here." icon="link" iconColor={paint.from} onPress={() => navigation.startCreation('sell-listed')} />
             <LinkButton label="Marketplaces aren’t connected" tint={color.ink3} onPress={() => setMarkets(true)} />
+            {/* Part of the cockpit sheet's content, so React Native presents it from the sheet on screen (navigation.md, React Native Modals). */}
+            <Sheet visible={markets} title="Marketplaces" onClose={() => setMarkets(false)}>
+              <T variant="body" color={color.ink2}>Vinted, Marktplaats and Grailed aren’t connected. You list it there. This app keeps the price, the offer and whether it sold.</T>
+              <T variant="small" color={color.ink3}>One item can only sit in one place for now. Several listings for the same item comes later.</T>
+            </Sheet>
           </View>
         }
       />
-      <Sheet visible={markets} title="Marketplaces" onClose={() => setMarkets(false)}>
-        <T variant="body" color={color.ink2}>Vinted, Marktplaats and Grailed aren’t connected. You list it there. This app keeps the price, the offer and whether it sold.</T>
-        <T variant="small" color={color.ink3}>One item can only sit in one place for now. Several listings for the same item comes later.</T>
-      </Sheet>
     </>
   );
 }

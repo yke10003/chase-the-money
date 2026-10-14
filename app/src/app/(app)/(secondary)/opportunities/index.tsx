@@ -99,7 +99,7 @@ export default function MissionsScreen() {
                 <Button label="Sell" onPress={() => router.dismissTo('/sell')} />
                 <Button label="Freelance" tone="secondary" onPress={() => router.dismissTo('/freelance')} />
                 <Button label="Recover" tone="secondary" onPress={() => router.dismissTo('/recover')} />
-                <Button label="Custom mission" tone="ghost" onPress={() => router.push('/opportunities/new')} />
+                <Button label="Custom mission" tone="ghost" onPress={() => router.navigate('/opportunities/new')} />
               </View>
             }
           />
@@ -115,8 +115,8 @@ export default function MissionsScreen() {
         subtitle={`${counts.open} in play${counts.done > 0 ? ` · ${counts.done} done` : ''}. Costs you reviewed stay here too.`}
         action={
           <View style={{ flexDirection: 'row', gap: space.sm, flexWrap: 'wrap' }}>
-            <Button label="Custom mission" tone="secondary" onPress={() => router.push('/opportunities/new')} />
-            <Button label="Review a cost" tone="secondary" onPress={() => router.push('/opportunities?start=cost')} />
+            <Button label="Custom mission" tone="secondary" onPress={() => router.navigate('/opportunities/new')} />
+            <Button label="Review a cost" tone="secondary" onPress={() => router.setParams({ start: 'cost' })} />
           </View>
         }
       />
@@ -229,7 +229,7 @@ function MissionRow({ mission }: { mission: Opportunity }) {
   const { color, styles, typeColor, typeScale } = useActivityUi();
   const router = useRouter();
   // A Sell mission opens its product. That is a top-level page, so the coordinator closes this one first.
-  const open = () => (mission.sell_item_id != null ? navigation.openProduct(mission.sell_item_id) : router.push(`/opportunities/${mission.id}`));
+  const open = () => (mission.sell_item_id != null ? navigation.openProduct(mission.sell_item_id) : router.navigate(`/opportunities/${mission.id}`));
   const layout = useLayout();
   const group = missionGroup(mission);
   const next = mission.next_action;

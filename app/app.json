@@ -42,7 +42,10 @@
             { "source": "/sell/setup/[id]", "destination": "/create/sell/setup/[id]" },
             { "source": "/sell/items/[id]", "destination": "/product/[id]" },
             { "source": "/sell/items/[id]/edit", "destination": "/product/[id]" },
-            { "source": "/sell/items/[id]/collage", "destination": "/product/[id]" }
+            { "source": "/sell/items/[id]/collage", "destination": "/product/[id]" },
+            { "source": "/freelance/new", "destination": "/create/freelance" },
+            { "source": "/recover/new", "destination": "/create/recover" },
+            { "source": "/build/new", "destination": "/create/build" }
           ]
         }
       ],

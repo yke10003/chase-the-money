@@ -13,20 +13,13 @@ import { useTheme } from '@/state/theme';
 
 export default function CustomMissionScreen() {
   const params = useLocalSearchParams<{ mode?: string }>();
-  const router = useRouter();
 
   useEffect(() => {
-    if (params.mode === 'sell') {
-      // Closes this page, waits for the dismiss to finish, then presents Sell creation.
-      navigation.startCreation('sell');
-    } else if (params.mode === 'freelance') {
-      router.dismissTo('/freelance/new');
-    } else if (params.mode === 'recover') {
-      router.dismissTo('/recover/new');
-    } else if (params.mode === 'build') {
-      router.dismissTo('/build/new');
+    if (params.mode === 'sell' || params.mode === 'freelance' || params.mode === 'recover' || params.mode === 'build') {
+      // Closes this page, waits for the dismiss to finish, then presents that creation.
+      navigation.startCreation(params.mode);
     }
-  }, [params.mode, router]);
+  }, [params.mode]);
 
   if (params.mode === 'sell' || params.mode === 'freelance' || params.mode === 'recover' || params.mode === 'build') {
     return null;
@@ -97,7 +90,9 @@ function CutCost() {
   const { color } = useTheme();
   const [title, setTitle] = useState('');
   const [monthly, setMonthly] = useState('');
-  const form = usePlaybookStart('/opportunities');
+  const router = useRouter();
+  // Back to the All activity page that is already underneath, or onto it when this page was opened alone.
+  const form = usePlaybookStart(() => router.dismissTo('/opportunities'));
 
   async function submit() {
     const name = title.trim();

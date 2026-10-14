@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native';
 
 import { getCatalog, getCurrentGoal, getProfile, saveProfile, updateGoal } from '@/api/endpoints';
@@ -10,10 +10,12 @@ import { Button, Chips, DateField, Divider, ErrorState, Field, InlineError, Link
 import { useLayout } from '@/design/layout';
 import type { Palette } from '@/design/palette';
 import { font, radius, space, weight } from '@/design/tokens';
-import { confirmAction } from '@/lib/confirm';
+import { confirmAction, confirmDiscard } from '@/lib/confirm';
+import { isDirty } from '@/lib/discard';
 import { errorMessage, fieldError } from '@/lib/errors';
 import { goalPeriodName, goalRhythmSentence } from '@/lib/goal';
 import { formatAmount, majorToMinor, minorToMajorInput } from '@/lib/money';
+import { useDiscardGuard } from '@/lib/use-discard-guard';
 import { useAuth } from '@/state/auth';
 import { useRefreshProduct } from '@/state/query';
 import { useTheme, type AppearancePreference } from '@/state/theme';
@@ -39,6 +41,13 @@ export default function SettingsScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ tab?: string }>();
   const [tab, setTab] = useState<Tab>(params.tab === 'goal' || params.tab === 'account' ? params.tab : 'profile');
+  // The two editable forms stay mounted while their tab is hidden, so switching tabs never drops typed changes.
+  // Each reports whether it has unsaved changes, and one guard asks before Close, a swipe or Android back leaves the page.
+  const [dirty, setDirty] = useState({ profile: false, goal: false });
+  const setProfileDirty = useCallback((value: boolean) => setDirty((current) => ({ ...current, profile: value })), []);
+  const setGoalDirty = useCallback((value: boolean) => setDirty((current) => ({ ...current, goal: value })), []);
+
+  useDiscardGuard(dirty.profile || dirty.goal, confirmDiscard);
 
   return (
     <View style={{ gap: space.xl, maxWidth: 880 }}>
@@ -54,8 +63,12 @@ export default function SettingsScreen() {
         ]}
         onChange={setTab}
       />
-      {tab === 'profile' ? <ProfileForm /> : null}
-      {tab === 'goal' ? <GoalForm /> : null}
+      <View style={{ display: tab === 'profile' ? 'flex' : 'none' }}>
+        <ProfileForm onDirty={setProfileDirty} />
+      </View>
+      <View style={{ display: tab === 'goal' ? 'flex' : 'none' }}>
+        <GoalForm onDirty={setGoalDirty} />
+      </View>
       {tab === 'account' ? <Account /> : null}
     </View>
   );
@@ -92,13 +105,15 @@ function Section({ title, lead, children }: { title: string; lead?: string; chil
 
 type Draft = Omit<UserProfile, 'skills'> & { skills: Array<{ name: string; proficiency: string | null }> };
 
-function ProfileForm() {
+function ProfileForm({ onDirty }: { onDirty: (dirty: boolean) => void }) {
   const { color, styles, typeScale } = useSettingsUi();
   const catalog = useQuery({ queryKey: ['catalog'], queryFn: getCatalog });
   const profile = useQuery({ queryKey: ['profile'], queryFn: getProfile });
   const refresh = useRefreshProduct();
   const layout = useLayout();
   const [draft, setDraft] = useState<Draft | null>(null);
+  // What the form looked like when it was last loaded or saved. The draft is unsaved while it differs.
+  const [baseline, setBaseline] = useState<Draft | null>(null);
   const [customSkill, setCustomSkill] = useState('');
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
@@ -106,9 +121,18 @@ function ProfileForm() {
 
   useEffect(() => {
     if (profile.data && draft === null) {
-      setDraft({ ...profile.data.data, skills: profile.data.data.skills.map((skill) => ({ ...skill })) });
+      const loaded = { ...profile.data.data, skills: profile.data.data.skills.map((skill) => ({ ...skill })) };
+
+      setDraft(loaded);
+      setBaseline(loaded);
     }
   }, [profile.data, draft]);
+
+  const dirty = draft != null && baseline != null && isDirty(baseline, draft);
+
+  useEffect(() => {
+    onDirty(dirty);
+  }, [dirty, onDirty]);
 
   if (catalog.isError || profile.isError) {
     return <ErrorState message={errorMessage(catalog.error ?? profile.error)} />;
@@ -139,6 +163,8 @@ function ProfileForm() {
   }
 
   async function save() {
+    const saving = form;
+
     setBusy(true);
     setError(null);
 
@@ -153,6 +179,7 @@ function ProfileForm() {
         situation: form.situation,
         skills: form.skills.map((skill) => ({ name: skill.name, proficiency: skill.proficiency })),
       });
+      setBaseline(saving);
       await refresh();
       setSaved(true);
     } catch (caught) {
@@ -274,7 +301,7 @@ function ProfileForm() {
   );
 }
 
-function GoalForm() {
+function GoalForm({ onDirty }: { onDirty: (dirty: boolean) => void }) {
   const { color, styles, typeScale } = useSettingsUi();
   const goal = useQuery({ queryKey: ['goal', 'current'], queryFn: getCurrentGoal });
   const refresh = useRefreshProduct();
@@ -285,6 +312,15 @@ function GoalForm() {
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
+  const server = goal.data;
+  const amountChanged = server != null && amount != null && majorToMinor(amount) !== server.amount_minor;
+  const startChanged = server != null && startsOn != null && startsOn !== server.starts_on;
+  const endChanged = server != null && endsOn != null && endsOn !== server.ends_on;
+  const dirty = (amountChanged || startChanged || endChanged) && !saved;
+
+  useEffect(() => {
+    onDirty(dirty);
+  }, [dirty, onDirty]);
 
   if (goal.isLoading) {
     return <LoadingState />;
@@ -339,8 +375,8 @@ function GoalForm() {
       </View>
       {current.recurring ? null : (
         <View style={{ flexDirection: 'row', gap: space.md, flexWrap: 'wrap' }}>
-          <DateField label="Counting from" value={startsOn ?? current.starts_on} onChange={setStartsOn} />
-          <DateField label="Reach it by" value={endsOn ?? current.ends_on} onChange={setEndsOn} />
+          <DateField label="Counting from" value={startsOn ?? current.starts_on} onChange={(value) => { setStartsOn(value); setSaved(false); }} />
+          <DateField label="Reach it by" value={endsOn ?? current.ends_on} onChange={(value) => { setEndsOn(value); setSaved(false); }} />
         </View>
       )}
       {error ? <InlineError message={errorMessage(error)} /> : null}

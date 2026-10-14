@@ -348,6 +348,16 @@ function iconFor(type: OpportunityType): IconName {
   return 'briefcase';
 }
 
+// A starter is either a tab with a `start` param, which is a plain tab switch, or All activity, which is the secondary modal.
+function openStarter(href: string, router: ReturnType<typeof useRouter>) {
+  if (href.startsWith('/opportunities')) {
+    navigation.openSecondary(href);
+    return;
+  }
+
+  router.push(href);
+}
+
 function Starters({ missions, heading }: { missions: StarterMission[]; heading: string | null }) {
   const { color, accent } = useHomeStyles();
   const router = useRouter();
@@ -366,7 +376,7 @@ function Starters({ missions, heading }: { missions: StarterMission[]; heading: 
               detail={mission.detail}
               icon={STARTER_ICONS[mission.key] ?? 'arrowRight'}
               iconColor={accent[kind === 'build' ? 'build' : kind].from}
-              onPress={() => router.push(STARTER_HREFS[mission.destination] ?? '/sell')}
+              onPress={() => openStarter(STARTER_HREFS[mission.destination] ?? '/sell', router)}
             />
           );
         })}
