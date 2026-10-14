@@ -1,4 +1,3 @@
-import { useRouter } from 'expo-router';
 import type { ReactNode } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View, type PressableStateCallbackType } from 'react-native';
 
@@ -7,19 +6,19 @@ import { font, space, weight } from '@/design/tokens';
 import { dateParts } from '@/lib/dates';
 import { formatAmount, formatAmountRange } from '@/lib/money';
 import { attentionFor, missionGroup } from '@/lib/mission';
+import { navigation } from '@/lib/navigation';
 import { useTheme } from '@/state/theme';
 
 type MoneyLine = { text: string; label: string; certainty: 'expected' | 'possible' };
 
 export function AreaList({ missions }: { missions: Opportunity[]; empty?: string }) {
-  const router = useRouter();
   const { color } = useTheme();
 
   return (
     <View>
       {missions.map((mission, index) => (
         <View key={mission.id} style={index > 0 ? { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: color.line } : null}>
-          <RecordRow mission={mission} onPress={() => router.push(`/opportunities/${mission.id}`)} />
+          <RecordRow mission={mission} onPress={() => navigation.openMission(mission.id, { sellItemId: mission.sell_item_id })} />
         </View>
       ))}
     </View>

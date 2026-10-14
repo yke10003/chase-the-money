@@ -15,14 +15,18 @@ export type CreationKind = 'sell' | 'sell-listed';
 export type Intent =
   | { type: 'startCreation'; kind: CreationKind }
   | { type: 'resumeCreation'; kind: 'sell'; itemId: number }
+  /** `itemId` is a Sell item id, never an opportunity id. */
+  | { type: 'openProduct'; itemId: number; origin?: MainTab }
+  /** A Sell mission with a known item opens that item's Product Detail instead (T6). */
+  | { type: 'openMission'; missionId: number; sellItemId?: number | null; origin?: MainTab }
   | { type: 'finishCreation'; feedback?: string }
   | { type: 'closeExperience' };
 
 export type NavSnapshot = {
   /** The tab selected under any top-level experience. */
   tabUnderneath: MainTab | null;
-  /** The (app) route above the tabs, if any, with the origin it was opened from. */
-  topLevel: { route: string; origin: MainTab | null } | null;
+  /** The (app) route above the tabs, if any, with the origin it was opened from and its `id` param (a product or setup id). */
+  topLevel: { route: string; origin: MainTab | null; id: string | null } | null;
   /** An earlier intent is still waiting for its native transition. */
   pending: boolean;
   /** iOS reports onFinishTransitioning. Elsewhere steps run back to back. */
@@ -40,6 +44,9 @@ export type Step =
 
 export const TABS_ROUTE = '(tabs)';
 export const SELL_CREATION_ROUTE = 'create/sell';
+export const PRODUCT_ROUTE = 'product/[id]';
+/** Missions open inside the (secondary) group, which is one native modal for every secondary page. */
+export const SECONDARY_ROUTE = '(secondary)';
 
 const TAB_ROUTES: Record<string, MainTab> = {
   index: 'home',
@@ -71,7 +78,7 @@ export function tabHref(tab: MainTab): string {
 
 /** Where an experience returns when it was opened without an origin, such as a cold link. */
 function categoryTab(route: string): MainTab | null {
-  if (route === SELL_CREATION_ROUTE || route === 'product/[id]') {
+  if (route === SELL_CREATION_ROUTE || route === PRODUCT_ROUTE) {
     return 'sell';
   }
 
@@ -88,12 +95,50 @@ function creationHref(intent: Extract<Intent, { type: 'startCreation' | 'resumeC
   return `/create/sell/${page}?origin=${origin}`;
 }
 
+function productHref(itemId: number, origin: MainTab): string {
+  return `/product/${itemId}?origin=${origin}`;
+}
+
+function missionHref(missionId: number, origin: MainTab): string {
+  return `/opportunities/${missionId}?origin=${origin}`;
+}
+
 function settled(now: NavSnapshot, top: string, steps: Step[]): Step[] {
   if (!now.nativeSettle) {
     return steps;
   }
 
   return [...steps, { op: 'awaitNativeSettle', top }];
+}
+
+/**
+ * Opening a detail. One push when nothing is open. Otherwise the open experience closes first and the
+ * detail is presented once UIKit has finished, because a top-level modal is never replaced by another.
+ * Creation is never closed here: its X owns the save-or-discard decision.
+ */
+function planDetail(now: NavSnapshot, intent: Extract<Intent, { type: 'openProduct' | 'openMission' }>): Step[] {
+  const sellItemId = intent.type === 'openProduct' ? intent.itemId : intent.sellItemId;
+  const product = sellItemId != null;
+  const route = product ? PRODUCT_ROUTE : SECONDARY_ROUTE;
+
+  if (now.topLevel?.route === SELL_CREATION_ROUTE) {
+    return [{ op: 'ignore', reason: 'creation-open' }];
+  }
+
+  if (product && now.topLevel?.route === PRODUCT_ROUTE && now.topLevel.id === String(sellItemId)) {
+    return [{ op: 'ignore', reason: 'already-open' }];
+  }
+
+  // Read now, while the experience that started this is still in route state.
+  const origin = intent.origin ?? now.topLevel?.origin ?? now.tabUnderneath ?? (product ? 'sell' : 'home');
+  const href = product ? productHref(sellItemId, origin) : missionHref(intent.type === 'openMission' ? intent.missionId : 0, origin);
+  const present = settled(now, route, [{ op: 'push', href }]);
+
+  if (!now.topLevel) {
+    return present;
+  }
+
+  return [...settled(now, TABS_ROUTE, [{ op: 'back' }]), ...present];
 }
 
 /**
@@ -121,6 +166,10 @@ export function planTransition(now: NavSnapshot, intent: Intent): Step[] {
 
     // Product Detail or a secondary page is open: close it, wait until it is gone, then present (T1).
     return [...settled(now, TABS_ROUTE, [{ op: 'back' }]), ...present];
+  }
+
+  if (intent.type === 'openProduct' || intent.type === 'openMission') {
+    return planDetail(now, intent);
   }
 
   if (!now.topLevel) {
@@ -203,7 +252,10 @@ export function readSnapshot(root: unknown, pending: boolean, nativeSettle: bool
   const tabs = app?.routes?.find((route) => route.name === TABS_ROUTE) ?? null;
   const selected = focusedRoute(tabs?.state)?.name ?? tabs?.params?.screen;
   const tabUnderneath = typeof selected === 'string' ? TAB_ROUTES[selected] ?? null : null;
-  const topLevel = top && top.name !== TABS_ROUTE ? { route: top.name, origin: parseTab(routeParam(top, 'origin')) } : null;
+  const id = top ? routeParam(top, 'id') : undefined;
+  const topLevel = top && top.name !== TABS_ROUTE
+    ? { route: top.name, origin: parseTab(routeParam(top, 'origin')), id: typeof id === 'string' || typeof id === 'number' ? String(id) : null }
+    : null;
 
   return { tabUnderneath, topLevel, pending, nativeSettle };
 }
@@ -227,6 +279,14 @@ function describe(intent: Intent): NavFields {
 
   if (intent.type === 'resumeCreation') {
     return { kind: intent.kind, id: intent.itemId };
+  }
+
+  if (intent.type === 'openProduct') {
+    return { id: intent.itemId, origin: intent.origin };
+  }
+
+  if (intent.type === 'openMission') {
+    return { id: intent.missionId, sellItemId: intent.sellItemId, origin: intent.origin };
   }
 
   return {};
@@ -361,8 +421,10 @@ export function createNavigator() {
 
         if (expected === TABS_ROUTE) {
           current.log('transition.dismiss.finished');
+        } else if (expected === SELL_CREATION_ROUTE) {
+          current.log('creation.presented', { top: actual });
         } else {
-          current.log(expected === SELL_CREATION_ROUTE ? 'creation.presented' : 'transition.present.finished', { top: actual });
+          current.log('detail.presented', { top: actual });
         }
 
         run(current, rest);
@@ -394,6 +456,16 @@ export function createNavigator() {
 
     closeExperience() {
       go({ type: 'closeExperience' });
+    },
+
+    /** Product Detail for a Sell item. The id is the item's own id. */
+    openProduct(itemId: number, origin?: MainTab) {
+      go({ type: 'openProduct', itemId, origin });
+    },
+
+    /** Generic mission detail. Pass `sellItemId` when the API names one, and Product Detail opens instead. */
+    openMission(missionId: number, options: { sellItemId?: number | null; origin?: MainTab } = {}) {
+      go({ type: 'openMission', missionId, sellItemId: options.sellItemId, origin: options.origin });
     },
   };
 }

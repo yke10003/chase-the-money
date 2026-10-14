@@ -118,6 +118,9 @@ export default function AppLayout() {
       <Stack.Screen name="(tabs)" options={{ contentStyle: { backgroundColor: 'transparent' } }} />
       <Stack.Screen
         name="product/[id]"
+        // A second push of the same item moves it to the top instead of stacking a duplicate. The coordinator
+        // already ignores that request, so this only covers links that do not go through it.
+        dangerouslySingular
         options={{
           presentation: Platform.OS === 'ios' ? 'fullScreenModal' : 'card',
           animation: Platform.OS === 'ios' ? 'slide_from_bottom' : 'fade',

@@ -1,5 +1,7 @@
 import { Stack } from 'expo-router';
+import { getFocusedRouteNameFromRoute } from 'expo-router/react-navigation';
 
+import { photosSheetGestureEnabled } from '@/lib/photos-nav';
 import { useTheme } from '@/state/theme';
 
 export default function ProductLayout() {
@@ -10,14 +12,16 @@ export default function ProductLayout() {
       <Stack.Screen name="index" options={{ animation: 'none' }} />
       <Stack.Screen
         name="photos"
-        options={{
+        options={({ route }) => ({
           presentation: 'formSheet',
           sheetGrabberVisible: false,
           sheetAllowedDetents: [1],
           sheetExpandsWhenScrolledToEdge: false,
-          gestureEnabled: true,
+          // Draggable only on the overview. While an editor is open, a drag would target this
+          // route and close the editor and Photos together (lib/photos-nav.ts).
+          gestureEnabled: photosSheetGestureEnabled(getFocusedRouteNameFromRoute(route)),
           contentStyle: { backgroundColor: color.paper },
-        }}
+        })}
       />
     </Stack>
   );

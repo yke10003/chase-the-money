@@ -12,3 +12,17 @@ export function confirmAction(title: string, message: string, labels: { cancel: 
     ]);
   });
 }
+
+/** Throwing edits away: Keep editing is the safe default, Discard is the destructive one. */
+export function confirmDiscard(message = 'Your changes will be lost.'): Promise<boolean> {
+  if (Platform.OS === 'web') {
+    return Promise.resolve(window.confirm(`Discard changes?\n\n${message}`));
+  }
+
+  return new Promise((resolve) => {
+    Alert.alert('Discard changes?', message, [
+      { text: 'Keep editing', style: 'cancel', onPress: () => resolve(false) },
+      { text: 'Discard', style: 'destructive', onPress: () => resolve(true) },
+    ], { cancelable: true, onDismiss: () => resolve(false) });
+  });
+}

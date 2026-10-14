@@ -72,6 +72,8 @@ export type Opportunity = {
   abandoned_at: string | null;
   created_at: string | null;
   updated_at: string | null;
+  /** The Sell product to open (/product/[id]) when this mission is a Sell item. Not the mission's own id. */
+  sell_item_id: number | null;
   next_action: OpportunityAction | null;
 };
 
@@ -157,6 +159,7 @@ export type SuggestedAction = OpportunityAction & {
   opportunity_title: string;
   opportunity_type: OpportunityType;
   expected_on: string | null;
+  sell_item_id: number | null;
   why: string | null;
 };
 

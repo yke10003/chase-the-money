@@ -118,9 +118,7 @@ export function listingPlace(platform: string | null, url: string): string {
   }
 }
 
-/** Edit, collage, and background stay inside the Photos sheet when opened from the product page. */
-export function itemLeaf(pathname: string, id: number, leaf: 'edit' | 'collage' | 'background'): string {
-  const root = pathname.startsWith('/product/') ? `/product/${id}/photos` : `/sell/items/${id}`;
-
-  return `${root}/${leaf}`;
+/** Edit and collage are pushes inside the Photos sheet. */
+export function itemLeaf(id: number, leaf: 'edit' | 'collage'): string {
+  return `/product/${id}/photos/${leaf}`;
 }

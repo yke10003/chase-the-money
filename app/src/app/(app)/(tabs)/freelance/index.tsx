@@ -18,6 +18,7 @@ import { errorMessage } from '@/lib/errors';
 import { formatAmount, formatAmountRange } from '@/lib/money';
 import { attentionFor, missionGroup } from '@/lib/mission';
 import { navRequest } from '@/lib/nav-log';
+import { navigation } from '@/lib/navigation';
 import { useRefreshProduct } from '@/state/query';
 import { useTheme } from '@/state/theme';
 
@@ -39,7 +40,7 @@ export default function FreelanceScreen() {
     // dismissing (navigation.md, T9), so it opens from the sheet's onDismiss.
     if (Platform.OS !== 'ios') {
       setSheet(null);
-      router.push(`/opportunities/${id}`);
+      navigation.openMission(id);
       return;
     }
 
@@ -57,7 +58,7 @@ export default function FreelanceScreen() {
 
     pendingMission.current = null;
     navRequest('freelance.sheet.dismissed', { id });
-    router.push(`/opportunities/${id}`);
+    navigation.openMission(id);
   }
 
   useEffect(() => {
@@ -118,7 +119,7 @@ export default function FreelanceScreen() {
               {guided.length > 0 ? (
                 <View style={{ gap: 12 }}>
                   {guided.map((mission) => (
-                    <LeadCard key={mission.id} mission={mission} onPress={() => router.push(`/opportunities/${mission.id}`)} />
+                    <LeadCard key={mission.id} mission={mission} onPress={() => navigation.openMission(mission.id)} />
                   ))}
                 </View>
               ) : (

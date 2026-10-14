@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Image, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -22,6 +22,8 @@ import { ChoiceBlock, sellIcon } from '@/components/sell-flow';
 import { Button, Field, InlineError, LoadingState, MoneyField, T } from '@/components/ui';
 import { useLayout } from '@/design/layout';
 import { font, space, weight } from '@/design/tokens';
+import { confirmDiscard } from '@/lib/confirm';
+import { createDiscardGuard, isDirty } from '@/lib/discard';
 import { errorMessage } from '@/lib/errors';
 import { formatAmount, formatAmountRange, majorToMinor, minorToMajorInput } from '@/lib/money';
 import { navRequest } from '@/lib/nav-log';
@@ -72,14 +74,8 @@ export function ProductPage() {
   }, [id]);
 
   function close() {
-    navRequest('product.close.request', { id, canGoBack: router.canGoBack() });
-
-    if (router.canGoBack()) {
-      router.back();
-      return;
-    }
-
-    router.dismissTo('/sell');
+    navRequest('product.close.request', { id });
+    navigation.closeExperience();
   }
 
   async function keep(next: SellItemView) {
@@ -427,6 +423,8 @@ function Editor({
   onAction: (input: Record<string, unknown>) => Promise<void>;
 }) {
   const listingAdd = name === 'listings' && adding;
+  const [dirty, setDirty] = useState(false);
+  const guard = useMemo(() => createDiscardGuard(() => confirmDiscard()), []);
   const title = listingAdd
     ? 'Add similar listing'
     : name === 'details' ? 'Details'
@@ -437,37 +435,66 @@ function Editor({
               : name === 'listings' ? 'Similar listings'
                 : '';
 
+  // A different form opens clean. Each form reports when it differs from how it opened.
+  useEffect(() => {
+    setDirty(false);
+  }, [name, adding]);
+
+  // Every way out comes through here: Close, a swipe down, Android back. One dialog, and a save in flight is left alone.
+  async function leave() {
+    if (busy) {
+      return;
+    }
+
+    if (dirty && !(await guard.request())) {
+      return;
+    }
+
+    if (listingAdd) {
+      onBack();
+      return;
+    }
+
+    onClose();
+  }
+
   return (
     <Modal
       visible={name != null}
       animationType="slide"
       presentationStyle="pageSheet"
-      onRequestClose={() => {
-        if (listingAdd) {
-          onBack();
-          return;
-        }
-        onClose();
-      }}
+      // Dirty, or one step back from adding a listing: the swipe is only an attempt, and leave() decides.
+      allowSwipeDismissal={!dirty && !listingAdd}
+      onRequestClose={() => void leave()}
     >
       <EditingSheet
         title={title}
-        onClose={listingAdd ? onBack : onClose}
+        onClose={() => void leave()}
         right={name === 'listings' && !adding ? <GlassIconButton systemName="plus" icon="plus" label="Add similar listing" onPress={onAdd} /> : null}
       >
         <ScrollView style={styles.fill} contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: 24, gap: space.md }} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
           {error ? <InlineError message={error} /> : null}
-          {name === 'details' ? <DetailsForm item={item} fields={fields} conditions={conditions} busy={busy} onError={onError} onSaved={onSaved} run={run} /> : null}
-          {name === 'value' ? <ValueForm item={item} busy={busy} onError={onError} onSaved={onSaved} run={run} /> : null}
-          {name === 'description' ? <DescriptionForm item={item} busy={busy} onSaved={onSaved} run={run} /> : null}
-          {name === 'action' && item.next ? <ActionForm item={item} busy={busy} onError={onError} onAction={onAction} /> : null}
-          {name === 'outcome' && outcome ? <OutcomeForm outcome={outcome} busy={busy} onError={onError} onEvent={onEvent} /> : null}
-          {listingAdd ? <ComparableForm item={item} busy={busy} onError={onError} onSaved={onSaved} run={run} /> : null}
+          {name === 'details' ? <DetailsForm item={item} fields={fields} conditions={conditions} busy={busy} onError={onError} onDirty={setDirty} onSaved={onSaved} run={run} /> : null}
+          {name === 'value' ? <ValueForm item={item} busy={busy} onError={onError} onDirty={setDirty} onSaved={onSaved} run={run} /> : null}
+          {name === 'description' ? <DescriptionForm item={item} busy={busy} onDirty={setDirty} onSaved={onSaved} run={run} /> : null}
+          {name === 'action' && item.next ? <ActionForm item={item} busy={busy} onError={onError} onDirty={setDirty} onAction={onAction} /> : null}
+          {name === 'outcome' && outcome ? <OutcomeForm outcome={outcome} busy={busy} onError={onError} onDirty={setDirty} onEvent={onEvent} /> : null}
+          {listingAdd ? <ComparableForm item={item} busy={busy} onError={onError} onDirty={setDirty} onSaved={onSaved} run={run} /> : null}
           {name === 'listings' && !adding ? <ListingsOverview item={item} onAdd={onAdd} onSaved={onSaved} run={run} /> : null}
         </ScrollView>
       </EditingSheet>
     </Modal>
   );
+}
+
+/** Tells the Editor when a form differs from how it opened, so it can ask before throwing the edits away. */
+function useReportDirty(onDirty: (dirty: boolean) => void, current: unknown) {
+  const [opened] = useState(current);
+  const dirty = isDirty(opened, current);
+
+  useEffect(() => {
+    onDirty(dirty);
+  }, [dirty, onDirty]);
 }
 
 function DetailsForm({
@@ -476,6 +503,7 @@ function DetailsForm({
   conditions,
   busy,
   onError,
+  onDirty,
   onSaved,
   run,
 }: {
@@ -484,6 +512,7 @@ function DetailsForm({
   conditions: Array<{ key: string; label: string }>;
   busy: boolean;
   onError: (message: string) => void;
+  onDirty: (dirty: boolean) => void;
   onSaved: (item: SellItemView) => Promise<void>;
   run: (work: () => Promise<void>) => Promise<void>;
 }) {
@@ -492,6 +521,7 @@ function DetailsForm({
   const [condition, setCondition] = useState<string | null>(item.condition);
   const [details, setDetails] = useState<Record<string, string>>(item.details ?? {});
   const asksBrand = fields.some((field) => field.key === 'brand' && !field.detail) || Boolean(item.brand);
+  useReportDirty(onDirty, { name, brand, condition, details });
 
   return (
     <View style={{ gap: space.md }}>
@@ -532,17 +562,20 @@ function ValueForm({
   item,
   busy,
   onError,
+  onDirty,
   onSaved,
   run,
 }: {
   item: SellItemView;
   busy: boolean;
   onError: (message: string) => void;
+  onDirty: (dirty: boolean) => void;
   onSaved: (item: SellItemView) => Promise<void>;
   run: (work: () => Promise<void>) => Promise<void>;
 }) {
   const [draft, setDraft] = useState(() => valueDraft(item));
   const { low, high, unknown } = draft;
+  useReportDirty(onDirty, draft);
 
   return (
     <View style={{ gap: space.sm }}>
@@ -567,16 +600,19 @@ function ValueForm({
 function DescriptionForm({
   item,
   busy,
+  onDirty,
   onSaved,
   run,
 }: {
   item: SellItemView;
   busy: boolean;
+  onDirty: (dirty: boolean) => void;
   onSaved: (item: SellItemView) => Promise<void>;
   run: (work: () => Promise<void>) => Promise<void>;
 }) {
   const [title, setTitle] = useState(item.listing_title ?? '');
   const [text, setText] = useState(item.listing_description ?? '');
+  useReportDirty(onDirty, { title, text });
 
   return (
     <View style={{ gap: space.md }}>
@@ -597,11 +633,13 @@ function ActionForm({
   item,
   busy,
   onError,
+  onDirty,
   onAction,
 }: {
   item: SellItemView;
   busy: boolean;
   onError: (message: string) => void;
+  onDirty: (dirty: boolean) => void;
   onAction: (input: Record<string, unknown>) => Promise<void>;
 }) {
   const next = item.next;
@@ -613,6 +651,7 @@ function ActionForm({
     return seeded;
   });
   const suggestion = listingSuggestion(item);
+  useReportDirty(onDirty, values);
 
   if (!next) {
     return null;
@@ -663,14 +702,17 @@ function OutcomeForm({
   outcome,
   busy,
   onError,
+  onDirty,
   onEvent,
 }: {
   outcome: PlaybookOutcome;
   busy: boolean;
   onError: (message: string) => void;
+  onDirty: (dirty: boolean) => void;
   onEvent: (input: Record<string, unknown>) => Promise<void>;
 }) {
   const [values, setValues] = useState<Record<string, string>>({});
+  useReportDirty(onDirty, values);
 
   return (
     <View style={{ gap: space.md }}>
@@ -768,18 +810,21 @@ function ComparableForm({
   item,
   busy,
   onError,
+  onDirty,
   onSaved,
   run,
 }: {
   item: SellItemView;
   busy: boolean;
   onError: (message: string) => void;
+  onDirty: (dirty: boolean) => void;
   onSaved: (item: SellItemView) => Promise<void>;
   run: (work: () => Promise<void>) => Promise<void>;
 }) {
   const [link, setLink] = useState('');
   const [price, setPrice] = useState('');
   const [saleState, setSaleState] = useState<'sold' | 'asking'>('sold');
+  useReportDirty(onDirty, { link, price, saleState });
 
   return (
     <View style={{ gap: space.md }}>

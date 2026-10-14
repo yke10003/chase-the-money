@@ -39,7 +39,10 @@
           "redirects": [
             { "source": "/sell/new", "destination": "/create/sell/new" },
             { "source": "/sell/listed", "destination": "/create/sell/listed" },
-            { "source": "/sell/setup/[id]", "destination": "/create/sell/setup/[id]" }
+            { "source": "/sell/setup/[id]", "destination": "/create/sell/setup/[id]" },
+            { "source": "/sell/items/[id]", "destination": "/product/[id]" },
+            { "source": "/sell/items/[id]/edit", "destination": "/product/[id]" },
+            { "source": "/sell/items/[id]/collage", "destination": "/product/[id]" }
           ]
         }
       ],

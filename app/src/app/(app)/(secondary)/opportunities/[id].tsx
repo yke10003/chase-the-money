@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
 
 import {
@@ -48,6 +48,7 @@ import { crossedMilestone, goalPeriodName } from '@/lib/goal';
 import { formatAmount, formatAmountRange } from '@/lib/money';
 import { areaHref, areaOf } from '@/lib/areas';
 import { CERTAINTY_LABEL, certaintyFor, describeProgress, humanizeDates, isGoodOutcome, journeyFor, missionKind } from '@/lib/mission';
+import { navigation } from '@/lib/navigation';
 import { useRefreshProduct } from '@/state/query';
 import { useTheme } from '@/state/theme';
 
@@ -69,6 +70,15 @@ export default function OpportunityDetailScreen() {
     enabled: Number.isFinite(id),
   });
 
+  const sellItemId = detail.data?.data.sell_item_id ?? null;
+
+  // An old link to a Sell mission. Product Detail is the one page for a Sell item.
+  useEffect(() => {
+    if (sellItemId != null) {
+      navigation.openProduct(sellItemId);
+    }
+  }, [sellItemId]);
+
   if (!Number.isFinite(id)) {
     return <ErrorState message="That mission link is not valid." />;
   }
@@ -79,6 +89,10 @@ export default function OpportunityDetailScreen() {
 
   if (detail.isError || !detail.data) {
     return <ErrorState message={errorMessage(detail.error)} onRetry={() => detail.refetch()} />;
+  }
+
+  if (sellItemId != null) {
+    return <LoadingState label="Opening your item" />;
   }
 
   return <Detail key={id} opportunity={detail.data.data} />;

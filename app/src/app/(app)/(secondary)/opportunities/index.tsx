@@ -29,6 +29,7 @@ import { formatShortDate, relativeDay } from '@/lib/dates';
 import { errorMessage } from '@/lib/errors';
 import { formatAmount, formatAmountRange } from '@/lib/money';
 import { attentionFor, isGoodOutcome, missionGroup, missionKind, TYPE_META, TYPES, type Certainty, type MissionGroup } from '@/lib/mission';
+import { navigation } from '@/lib/navigation';
 import { useTheme } from '@/state/theme';
 
 function useActivityUi() {
@@ -227,6 +228,8 @@ function moneyFor(mission: Opportunity): { text: string; certainty: Certainty } 
 function MissionRow({ mission }: { mission: Opportunity }) {
   const { color, styles, typeColor, typeScale } = useActivityUi();
   const router = useRouter();
+  // A Sell mission opens its product. That is a top-level page, so the coordinator closes this one first.
+  const open = () => (mission.sell_item_id != null ? navigation.openProduct(mission.sell_item_id) : router.push(`/opportunities/${mission.id}`));
   const layout = useLayout();
   const group = missionGroup(mission);
   const next = mission.next_action;
@@ -249,7 +252,7 @@ function MissionRow({ mission }: { mission: Opportunity }) {
   }
 
   return (
-    <PressableRow onPress={() => router.push(`/opportunities/${mission.id}`)} style={styles.row} accessibilityLabel={mission.title}>
+    <PressableRow onPress={open} style={styles.row} accessibilityLabel={mission.title}>
       <View style={{ flex: 1, gap: 2, minWidth: 0 }}>
         <View style={{ flexDirection: 'row', gap: space.xs, alignItems: 'center' }}>
           <T variant="bodyStrong" numberOfLines={1} style={{ flexShrink: 1 }}>{mission.title}</T>

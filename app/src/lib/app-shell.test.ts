@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 
 import { appWrapper, secondaryPresentation } from './app-shell';
 import { cockpitArea, shellPath } from './cockpit-scene';
+import { photosSheetGestureEnabled, photosStackGestures } from './photos-nav';
 import { planTransition, readSnapshot, type Step } from './navigation';
 
 // The router tests drive Expo Router's own path parsing, target selection and
@@ -310,6 +311,41 @@ test('Product Detail closes back to the same tabs', () => {
   assert.equal(dismissed.routes[0].key, 'tabs-1');
 });
 
+test('opening Product Detail from Home pushes one route above the same tabs, and Close returns to Home', () => {
+  const root = liveRoot([], 'index');
+  const opened = runPlan(root, planTransition(readSnapshot(root, false, true), { type: 'openMission', missionId: 904, sellItemId: 17 }));
+  const app = appState(opened);
+
+  assert.deepEqual(app.routes.map((route) => route.name), ['(tabs)', 'product/[id]']);
+  assert.equal(app.routes[0].key, 'tabs-1');
+  assert.equal(app.routes[1].params?.id, '17');
+  // The mission id never reaches the product route.
+  assert.notEqual(app.routes[1].params?.id, '904');
+  assert.deepEqual(readSnapshot(opened, false, true).topLevel, { route: 'product/[id]', origin: 'home', id: '17' });
+
+  const closed = runPlan(opened, planTransition(readSnapshot(opened, false, true), { type: 'closeExperience' }));
+
+  assert.deepEqual(appState(closed).routes.map((route) => route.key), ['tabs-1']);
+  // No tab switch: Home is still the selected tab underneath.
+  assert.equal(readSnapshot(closed, false, true).tabUnderneath, 'home');
+});
+
+test('a mission with no Sell item opens the generic detail inside the secondary group', () => {
+  const root = liveRoot([], 'index');
+  const opened = runPlan(root, planTransition(readSnapshot(root, false, true), { type: 'openMission', missionId: 904, sellItemId: null }));
+
+  assert.deepEqual(appState(opened).routes.map((route) => route.name), ['(tabs)', '(secondary)']);
+});
+
+test('opening a product from a secondary page closes that page first, so no second modal is stacked', () => {
+  const root = liveRoot([secondary(['opportunities/index'])], 'index');
+  const steps = planTransition(readSnapshot(root, false, true), { type: 'openProduct', itemId: 17 });
+  const next = runPlan(root, steps);
+
+  assert.deepEqual(steps.map((step) => step.op), ['back', 'awaitNativeSettle', 'push', 'awaitNativeSettle']);
+  assert.deepEqual(appState(next).routes.map((route) => route.name), ['(tabs)', 'product/[id]']);
+});
+
 test('a cold link builds the tabs underneath, and Close reveals them without a duplicate', () => {
   for (const path of ['/opportunities/12', '/settings', '/progress', '/product/17']) {
     const routes = parse(path);
@@ -350,7 +386,7 @@ test('starting creation from a tab pushes one modal above the same tabs, and the
   assert.deepEqual(app.routes.map((route) => route.name), ['(tabs)', 'create/sell']);
   assert.equal(app.routes[0].key, 'tabs-1');
   // The pushed route carries its page and params nested until the creation stack mounts.
-  assert.deepEqual(readSnapshot(next, false, true).topLevel, { route: 'create/sell', origin: 'sell' });
+  assert.deepEqual(readSnapshot(next, false, true).topLevel, { route: 'create/sell', origin: 'sell', id: null });
 });
 
 test('Category replaces itself with setup inside the creation stack, so the modal stays up', () => {
@@ -414,7 +450,33 @@ test('old Sell creation links redirect to the creation route', () => {
   }
 
   assert.equal(applyRedirects('/sell', compiled), '/sell');
-  assert.equal(applyRedirects('/sell/items/4', compiled), '/sell/items/4');
+});
+
+test('old Sell item links open the canonical Product Detail, once, over the tabs', () => {
+  const compiled = redirects.map((redirect) => [routePatternToRegex(parseRouteSegments(redirect.source)), redirect, false]);
+
+  for (const from of ['/sell/items/4', '/sell/items/4/edit', '/sell/items/4/collage']) {
+    const href = `/${String(applyRedirects(from, compiled)).replace(/^\//, '')}`;
+
+    assert.equal(href, '/product/4', from);
+    // The redirect target is a real route, and it is not itself redirected again.
+    assert.equal(`/${String(applyRedirects(href, compiled)).replace(/^\//, '')}`, '/product/4', from);
+    assert.deepEqual(parse(href).map((route) => route.name), ['(tabs)', 'product/[id]'], from);
+  }
+
+  // A query string is dropped by the redirect, so the old ?photo= is not carried into Product Detail.
+  assert.equal(applyRedirects('/product/4', compiled), '/product/4');
+});
+
+test('the legacy Sell item pages and the unused background routes are gone from the route tree', () => {
+  const getSystemRoute = ({ defaults }: { defaults: unknown }) => defaults;
+  const routed = buildRoutes({ redirects, preserveRedirectAndRewrites: true, getSystemRoute, sitemap: false, notFound: false });
+  const appRoute = routed.tree.children.find((child: { route: string }) => child.route === '(app)');
+  const tabsRoute = appRoute.children.find((child: { route: string }) => child.route === '(tabs)');
+  const productRoute = appRoute.children.find((child: { route: string }) => child.route === 'product/[id]');
+
+  assert.deepEqual(childNames(tabsRoute, 'sell'), ['index']);
+  assert.deepEqual(childNames(productRoute, 'photos').sort(), ['collage', 'edit', 'index']);
 });
 
 test('redirect sources become root routes, not screens in the Sell tab', () => {
@@ -429,7 +491,150 @@ test('redirect sources become root routes, not screens in the Sell tab', () => {
 
   const rootRoutes = (routed.tree.children as { route: string; type: string }[]).filter((child) => child.type === 'redirect').map((child) => child.route);
 
-  assert.deepEqual(rootRoutes.sort(), ['sell/listed', 'sell/new', 'sell/setup/[id]']);
+  assert.deepEqual(rootRoutes.sort(), ['sell/items/[id]', 'sell/items/[id]/collage', 'sell/items/[id]/edit', 'sell/listed', 'sell/new', 'sell/setup/[id]']);
   assert.deepEqual(childNames(routedTabs, 'sell').filter((name) => name === 'new' || name === 'listed' || name.startsWith('setup')), []);
   assert.deepEqual(childNames(routed.tree, '(app)').filter((name) => name.startsWith('sell/')), []);
+});
+
+// ---- Photos sheet and its editors (stack 3 holds the sheet, stack 4 holds the pushes inside it) ----
+
+const productNode = appNode.children.find((child: { route: string }) => child.route === 'product/[id]');
+const productRouteNames = (productNode.children as { route: string }[]).map((child) => child.route);
+const photosRouteNames = childNames(productNode, 'photos');
+const productRouter = StackRouter({});
+const photosRouter = StackRouter({});
+
+/** Live state with Product Detail open. `photos` is the sheet, `inside` is what sits in the sheet's own stack. */
+function withProduct(sheet: string[] | null): Nav {
+  const photosRoute: Route = {
+    key: 'photos-1',
+    name: 'photos',
+    state: {
+      key: 'photos-nav',
+      type: 'stack',
+      index: (sheet?.length ?? 1) - 1,
+      routes: (sheet ?? ['index']).map((name, at) => ({ key: `inside-${at}`, name })),
+      routeNames: photosRouteNames,
+      preloadedRoutes: [],
+    },
+  };
+  const product: Route = {
+    key: 'product-1',
+    name: 'product/[id]',
+    params: { id: '17' },
+    state: {
+      key: 'product-nav',
+      type: 'stack',
+      index: sheet ? 1 : 0,
+      routes: sheet ? [{ key: 'detail-1', name: 'index' }, photosRoute] : [{ key: 'detail-1', name: 'index' }],
+      routeNames: productRouteNames,
+      preloadedRoutes: [],
+    },
+  };
+
+  return liveRoot([product], 'index');
+}
+
+function productNav(root: Nav): Nav {
+  return appState(root).routes[1].state as Nav;
+}
+
+function photosNav(root: Nav): Nav {
+  return productNav(root).routes[1].state as Nav;
+}
+
+function names(nav: Nav): string[] {
+  return nav.routes.map((route) => route.name);
+}
+
+test('Photos and its editors are pushes in their own stack inside the sheet, not top-level routes', () => {
+  assert.deepEqual(productRouteNames.sort(), ['index', 'photos']);
+  assert.deepEqual(photosRouteNames.sort(), ['collage', 'edit', 'index']);
+});
+
+test('Edit Photo and Edit Collage open inside the Photos stack, leaving the sheet and Product Detail alone', () => {
+  for (const editor of ['edit', 'collage']) {
+    const root = withProduct(null);
+    const sheet = productRouter.getStateForAction(productNav(root), { type: 'NAVIGATE', payload: { name: 'photos' } }, options(productRouteNames));
+
+    assert.deepEqual(names(sheet), ['index', 'photos']);
+
+    const opened = withProduct(['index']);
+    const { targetKey, action } = linkAction(`/product/17/photos/${editor}?photo=9`, 'PUSH', opened);
+
+    assert.equal(targetKey, 'photos-nav', editor);
+
+    const next = photosRouter.getStateForAction(photosNav(opened), action, options(photosRouteNames));
+    const after = { ...opened };
+
+    assert.deepEqual(names(next), ['index', editor], editor);
+    // Nothing above the sheet changed: still one Product Detail over the same tabs, and no second modal.
+    assert.deepEqual(names(appState(after)), ['(tabs)', 'product/[id]'], editor);
+    assert.deepEqual(names(productNav(after)), ['index', 'photos'], editor);
+  }
+});
+
+test('Close or Back from an editor returns to the Photos overview and keeps the sheet open', () => {
+  for (const editor of ['edit', 'collage']) {
+    const root = withProduct(['index', editor]);
+    const back = photosRouter.getStateForAction(photosNav(root), { type: 'GO_BACK' }, options(photosRouteNames));
+
+    assert.deepEqual(names(back), ['index'], editor);
+    // The editor was the only thing popped. The sheet is still in Product Detail's stack.
+    assert.deepEqual(names(productNav(root)), ['index', 'photos'], editor);
+  }
+});
+
+test('the action a discard dispatches (GO_BACK on the editor) pops the editor and never the sheet', () => {
+  const root = withProduct(['index', 'edit']);
+  const discard = { type: 'GO_BACK', source: 'inside-1' };
+  const inner = photosRouter.getStateForAction(photosNav(root), discard, options(photosRouteNames));
+
+  assert.deepEqual(names(inner), ['index']);
+
+  // This is what a native sheet drag dispatches (onNativeDismissCancelled): pop of the `photos` route in stack 3.
+  // It is the action the guard used to replay on Discard, and it removes the editor and Photos together.
+  const sheetDrag = { type: 'POP', payload: { count: 1 }, source: 'photos-1', target: 'product-nav' };
+  const replayed = productRouter.getStateForAction(productNav(root), sheetDrag, options(productRouteNames));
+
+  assert.deepEqual(names(replayed), ['index']);
+});
+
+test('closing the Photos overview returns to Product Detail', () => {
+  const root = withProduct(['index']);
+
+  // Nothing to pop in the sheet's stack, so the dispatch falls through to the one that holds the sheet.
+  assert.equal(photosRouter.getStateForAction(photosNav(root), { type: 'GO_BACK' }, options(photosRouteNames)), null);
+
+  const closed = productRouter.getStateForAction(productNav(root), { type: 'GO_BACK' }, options(productRouteNames));
+
+  assert.deepEqual(names(closed), ['index']);
+});
+
+test('the Photos sheet is draggable only while no editor is open', () => {
+  assert.equal(photosSheetGestureEnabled(undefined), true);
+  assert.equal(photosSheetGestureEnabled('index'), true);
+  assert.equal(photosSheetGestureEnabled('edit'), false);
+  assert.equal(photosSheetGestureEnabled('collage'), false);
+});
+
+test('no screen inside the Photos sheet pops by swipe', () => {
+  assert.equal(photosStackGestures.gestureEnabled, false);
+  assert.equal(photosStackGestures.fullScreenGestureEnabled, false);
+});
+
+test('the layouts apply those rules to the routes they own', () => {
+  const productLayout = readFileSync(join(appDir, '(app)/product/[id]/_layout.tsx'), 'utf8');
+  const photosLayout = readFileSync(join(appDir, '(app)/product/[id]/photos/_layout.tsx'), 'utf8');
+
+  assert.match(productLayout, /photosSheetGestureEnabled\(getFocusedRouteNameFromRoute\(route\)\)/);
+  assert.doesNotMatch(productLayout, /gestureEnabled: true/);
+
+  for (const screen of ['index', 'edit', 'collage']) {
+    assert.match(photosLayout, new RegExp(`name="${screen}"[^\\n]*photosStackGestures`), screen);
+  }
+
+  // Product Detail itself and the sheet's grabber stay as they were.
+  assert.match(productLayout, /name="index" options=\{\{ animation: 'none' \}\}/);
+  assert.match(productLayout, /sheetGrabberVisible: false/);
 });

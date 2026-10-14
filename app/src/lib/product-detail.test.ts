@@ -34,9 +34,8 @@ test('product facts skip empty catalog fields and do not repeat brand', () => {
 });
 
 test('photo tools stay inside the photos sheet', () => {
-  assert.equal(itemLeaf('/product/4', 4, 'edit'), '/product/4/photos/edit');
-  assert.equal(itemLeaf('/product/4/photos', 4, 'background'), '/product/4/photos/background');
-  assert.equal(itemLeaf('/sell/items/4/edit', 4, 'collage'), '/sell/items/4/collage');
+  assert.equal(itemLeaf(4, 'edit'), '/product/4/photos/edit');
+  assert.equal(itemLeaf(4, 'collage'), '/product/4/photos/collage');
 });
 
 test('reordering moves the photo and keeps its cover flag', () => {
@@ -61,12 +60,9 @@ test('reordering moves the photo and keeps its cover flag', () => {
   assert.equal(listingPlace('', 'not a url'), 'Listing');
 });
 
-test('a sell card opens the product page, and creation still owns setup', () => {
-  const board = readFileSync(new URL('../app/(app)/(tabs)/sell/index.tsx', import.meta.url), 'utf8');
+test('creation still owns setup', () => {
   const setup = readFileSync(new URL('../app/(app)/create/sell/setup/[id].tsx', import.meta.url), 'utf8');
 
-  assert.equal(board.includes('router.push(`/product/${item.id}`)'), true);
-  assert.equal(board.includes('`/sell/items/${item.id}`'), false);
   // Replacing the creation modal with Product Detail is a modal-to-modal replace (navigation.md, E3).
   assert.equal(setup.includes('router.replace(`/product/'), false);
   assert.equal(setup.includes('Ready for the next step'), false);

@@ -17,6 +17,7 @@ import { errorMessage } from '@/lib/errors';
 import { goalPeriodName } from '@/lib/goal';
 import { formatAmount, formatAmountRange } from '@/lib/money';
 import { describeProgress, missionGroup, type Attention } from '@/lib/mission';
+import { navigation } from '@/lib/navigation';
 import { useTheme } from '@/state/theme';
 
 function useHomeStyles() {
@@ -233,7 +234,6 @@ function NowSection({
 
 function FeaturedAction({ action, missions }: { action: SuggestedAction; missions: Opportunity[] }) {
   const { color, typeScale } = useHomeStyles();
-  const router = useRouter();
   const mission = missions.find((item) => item.id === action.opportunity_id);
   const range = mission ? formatAmountRange(mission.potential_min_minor, mission.potential_max_minor, mission.currency) : null;
   const money = mission?.expected_amount_minor != null
@@ -249,7 +249,7 @@ function FeaturedAction({ action, missions }: { action: SuggestedAction; mission
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={`${action.title}, ${action.opportunity_title}`}
-      onPress={() => router.push(`/opportunities/${action.opportunity_id}`)}
+      onPress={() => navigation.openMission(action.opportunity_id, { sellItemId: action.sell_item_id })}
       style={(state) => [{
         gap: 6,
         padding: space.lg,
@@ -274,7 +274,6 @@ function FeaturedAction({ action, missions }: { action: SuggestedAction; mission
 
 function ActionLine({ action }: { action: SuggestedAction }) {
   const { color, accent } = useHomeStyles();
-  const router = useRouter();
   const paint = accent[action.opportunity_type];
   const minutes = timeLabel(action);
   const attention = whyAttention(action.why);
@@ -284,7 +283,7 @@ function ActionLine({ action }: { action: SuggestedAction }) {
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={`${action.title}, ${action.opportunity_title}`}
-      onPress={() => router.push(`/opportunities/${action.opportunity_id}`)}
+      onPress={() => navigation.openMission(action.opportunity_id, { sellItemId: action.sell_item_id })}
       style={(state) => ({
         flexDirection: 'row',
         alignItems: 'center',
@@ -378,7 +377,6 @@ function Starters({ missions, heading }: { missions: StarterMission[]; heading: 
 
 function WaitingSection({ missions }: { missions: Opportunity[] }) {
   const { typeScale } = useHomeStyles();
-  const router = useRouter();
 
   if (missions.length === 0) {
     return null;
@@ -396,7 +394,7 @@ function WaitingSection({ missions }: { missions: Opportunity[] }) {
           <Pressable
             key={mission.id}
             accessibilityRole="button"
-            onPress={() => router.push(`/opportunities/${mission.id}`)}
+            onPress={() => navigation.openMission(mission.id, { sellItemId: mission.sell_item_id })}
             style={{ flexDirection: 'row', gap: space.md, alignItems: 'baseline', paddingTop: index === 0 ? 4 : 10 }}
           >
             <View style={{ width: 52 }}>

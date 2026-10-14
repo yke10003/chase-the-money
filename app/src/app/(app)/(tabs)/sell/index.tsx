@@ -100,7 +100,7 @@ export default function SellScreen() {
               empty={open.length > 0 ? (
                 <ProductGrid columns={productColumns(layout)}>
                   {open.map((mission) => (
-                    <LegacyCard key={mission.id} mission={mission} onPress={() => router.push(`/opportunities/${mission.id}`)} />
+                    <LegacyCard key={mission.id} mission={mission} onPress={() => navigation.openMission(mission.id, { sellItemId: mission.sell_item_id })} />
                   ))}
                 </ProductGrid>
               ) : listLoading ? null : (
@@ -206,7 +206,7 @@ function SellBoard({ empty }: { empty: ReactNode }) {
           icon={categoryIcon(catalog.data?.data.categories, item.category)}
           onPress={() => {
             navRequest('product.open.request', { id: item.id, from: 'sell', setupDone: item.setup_done });
-            router.push(`/product/${item.id}`);
+            navigation.openProduct(item.id, 'sell');
           }}
         />
       ))}

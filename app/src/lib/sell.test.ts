@@ -57,24 +57,6 @@ test('an empty estimate stays unknown and a range stays a range', () => {
   assert.equal('error' in parseEstimate('600', '400', false), true);
 });
 
-test('a finished item returns to the sell overview already on the stack', () => {
-  const source = readFileSync(new URL('../app/(app)/(tabs)/sell/items/[id]/index.tsx', import.meta.url), 'utf8');
-
-  assert.equal(source.includes("router.replace('/sell')"), false);
-  assert.equal(source.includes('leaveSell(router)'), true);
-});
-
-test('background removal stays on the editor, and the sheet helper is not an expo route', () => {
-  const edit = readFileSync(new URL('../app/(app)/(tabs)/sell/items/[id]/edit.tsx', import.meta.url), 'utf8');
-  const background = readFileSync(new URL('../app/(app)/(tabs)/sell/items/[id]/background.tsx', import.meta.url), 'utf8');
-
-  assert.equal(edit.includes("itemLeaf(pathname, id, 'background')"), false);
-  assert.equal(edit.includes('@/lib/sell-background-sheet'), false);
-  assert.equal(background.includes('@/lib/sell-background-sheet'), true);
-  assert.equal(edit.includes('./background-sheet'), false);
-  assert.equal(background.includes('./background-sheet'), false);
-});
-
 test('Find something opens Money Hunt at the top of the Sell sheet, and a found item hands off to the creation modal', () => {
   const sell = readFileSync(new URL('../app/(app)/(tabs)/sell/index.tsx', import.meta.url), 'utf8');
   const discover = readFileSync(new URL('../app/(app)/discover.tsx', import.meta.url), 'utf8');

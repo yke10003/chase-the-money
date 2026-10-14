@@ -228,11 +228,3 @@ export function JourneyContinue({
 
   return <Button label={label} onPress={onPress} busy={busy} disabled={disabled} size="lg" iconRight="arrowRight" />;
 }
-
-/**
- * Pop back to the Sell overview that is already on the stack.
- * replace('/sell') would build a second overview.
- */
-export function leaveSell(router: { dismissTo: (href: '/sell') => void }) {
-  router.dismissTo('/sell');
-}
