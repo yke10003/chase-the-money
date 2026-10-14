@@ -106,6 +106,8 @@ Detail includes `playbook_view`, `actions`, `impacts`, and `xp_events`. `playboo
 
 Dates the user sends on goals, playbooks, and action completion are `YYYY-MM-DD` only.
 
+Every opportunity, and every row of Home's `suggested_actions` and `money_in_motion`, has `sell_item_id`: the id of the Sell item for a `sell_item` playbook mission, otherwise `null`. It is the item's own id, not the opportunity id. The app opens `/product/{sell_item_id}` with it. It is `null` when the item is gone or belongs to another account.
+
 `POST /api/v1/opportunities/{opportunity}/complete` is rejected for a playbook mission.
 
 ## Actions

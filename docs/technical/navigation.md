@@ -136,14 +136,14 @@ flowchart TD
   CS --> Hero["ScoreHeroView backdrop"]
   CS --> MS["MenuSheet<br/>raw ScreenStack 2"]
   MS --> Cockpit["Screen cockpit, formSheet<br/>renders CockpitBody"]
-  NT --> SellStack["Sell AreaStack<br/>index, items/[id] index, edit, collage, background"]
+  NT --> SellStack["Sell AreaStack<br/>index"]
   NT --> Others["Freelance, Build, Recover AreaStacks<br/>index, new"]
   Product --> PS["product/[id] Stack 3<br/>index, photos formSheet"]
-  PS --> PhS["photos Stack 4<br/>index, edit, collage pushes,<br/>background formSheet"]
+  PS --> PhS["photos Stack 4<br/>index, edit, collage pushes"]
   SellStack -.->|"index and items publish via bodyRef"| Cockpit
 ```
 
-`app.json` passes static `redirects` to the `expo-router` plugin: `/sell/new`, `/sell/listed` and `/sell/setup/[id]` go to their `/create/sell/…` routes. Expo Router applies them to `router.push` and friends and to incoming links, and adds the sources as root redirect routes (outside `(tabs)`). Metro needs a restart after `app.json` changes. **[Code]**
+`app.json` passes static `redirects` to the `expo-router` plugin: `/sell/new`, `/sell/listed` and `/sell/setup/[id]` go to their `/create/sell/…` routes, and `/sell/items/[id]`, `/sell/items/[id]/edit` and `/sell/items/[id]/collage` go to `/product/[id]` (Stage 4; a redirect keeps only path params, so an old `?photo=` is dropped). Expo Router applies them to `router.push` and friends and to incoming links, and adds the sources as root redirect routes (outside `(tabs)`). Metro needs a restart after `app.json` changes. **[Code]**
 
 Off iOS phone, `(tabs)/_layout.tsx` renders `<Slot/>` instead of `CockpitShell` and `NativeTabs`. Web tabs therefore unmount when the user switches. **[Code]**
 
@@ -259,20 +259,18 @@ In `setModalViewControllers`, if the previous modal `isBeingDismissed`, the fini
 - Already Listed finishes with `navigation.finishCreation('Listing added')`. No detail page opens (2.6).
 - Entry points: Sell "Sell something" and "Already listed" (`startCreation`), Money Hunt (`resumeCreation` with the new id), Product Detail and the legacy item page "Continue setup" (`resumeCreation`), and `/opportunities/new?mode=sell` (`startCreation`, which closes the secondary modal first).
 
-**Sell AreaStack and the legacy item page** **[Code]**
+**Sell AreaStack** **[Code]**
 
-- `/sell/items/[id]` renders inside the cockpit sheet through `CockpitPage`.
-- "Back to Sell" calls `leaveSell`. "Continue setup" calls `navigation.resumeCreation('sell', id)`.
-- Its `edit` and `collage` children are pushes in the Sell stack. `background` renders `null` because `publishBackgroundSheet` is never called.
+- The Sell AreaStack has one screen, `index`. The legacy item page (`sell/items/[id]`) was retired in Stage 4: its URLs redirect to `/product/[id]` and its files are gone.
 
 **Product Photos and editing** **[Code]**
 
-- `product/[id]/_layout.tsx` is a stack: `index` (no animation) and `photos` (`formSheet`, detents `[1]`, `gestureEnabled`).
-- `photos/_layout.tsx` is a stack: `index`, `edit` and `collage` (`slide_from_right`), and `background` (`formSheet`, dead).
-- `photos/edit|collage|background.tsx` re-export the `sell/items/[id]` versions.
-- `itemLeaf(pathname, id, leaf)` in `app/src/lib/product-detail.ts` picks the product or legacy path.
-- Reorder, cover and delete commit immediately.
-- Edit Photo confirms discard only from its Close button (`requestClose`). Saving calls `router.back()`. Crop is a React Native `Modal` (`pageSheet`).
+- `product/[id]/_layout.tsx` is a stack: `index` (no animation) and `photos` (`formSheet`, detents `[1]`). The sheet's `gestureEnabled` is `photosSheetGestureEnabled(getFocusedRouteNameFromRoute(route))`: on while the Photos overview is showing, off while `edit` or `collage` is on top.
+- `photos/_layout.tsx` is a stack: `index`, `edit` and `collage` (`index` has no animation, the editors `slide_from_right`). All three spread `photosStackGestures` (`gestureEnabled: false`, `fullScreenGestureEnabled: false`), so nothing inside the sheet pops by swipe. `edit.tsx` and `collage.tsx` are the implementations (moved here in Stage 4).
+- Both gesture rules live in `app/src/lib/photos-nav.ts`. **Why:** the editors are pushes inside the Photos sheet, so a native drag always targets the `photos` route of stack #3. With the gesture left on, one swipe closed the editor and Photos together, and a dirty Discard replayed that same pop.
+- `itemLeaf(id, leaf)` in `app/src/lib/product-detail.ts` builds `/product/:id/photos/edit|collage`.
+- Reorder, cover and delete commit immediately. **As built (native list, below):** on iOS the Photos overview is a SwiftUI `List` (Edit/Done, native reorder handles, a star for the cover, a chevron to open Edit Photo, swipe left to delete). Android and web keep a plain React Native list with Move earlier/later buttons.
+- Edit Photo and Collage call `useDiscardGuard(dirty, confirmDiscard)` (Stage 4, see the Stage 4 section). Discard and the guard's `leave()` (after a save) both go back one level from the editor. They never replay the blocked action. Presentation: an editor fills the Photos sheet's full-height detent (rounded top corners, not edge to edge). Edge to edge would need `edit` and `collage` as `fullScreenModal` siblings in stack #3, a second native modal over the sheet, which was not done. Crop is a React Native `Modal` (`pageSheet`).
 
 **React Native Modals** **[Code]**
 
@@ -317,10 +315,9 @@ In `setModalViewControllers`, if the previous modal `isBeingDismissed`, the fini
 | `/sell` | tab | – | Complete |
 | `/create/sell/new`, `/create/sell/setup/[id]`, `/create/sell/listed` | `(app)` `create/sell` group: `fullScreenModal`, own stack | X and Finish go through `navigation.ts` to the origin tab (`back()`, or `dismissTo(origin)` when the tab underneath differs) | Complete (Stage 3) |
 | `/sell/new`, `/sell/setup/[id]`, `/sell/listed` | static redirects in `app.json` | – | Redirect |
-| `/sell/items/[id]` and `edit`, `collage` | inside cockpit sheet | `leaveSell`, `back()` | Legacy, to retire |
-| `…/background` (both trees) | `formSheet` route | – | Dead |
-| `/product/[id]` | `(app)` `fullScreenModal` | `back()`, else `dismissTo('/sell')` | Canonical |
-| `/product/[id]/photos`, `edit`, `collage` | `formSheet` in stack #3, pushes in stack #4 | `back()` | Good pattern |
+| `/sell/items/[id]`, `…/edit`, `…/collage` | static redirects in `app.json` to `/product/[id]` | – | Redirect (Stage 4) |
+| `/product/[id]` | `(app)` `fullScreenModal`, `dangerouslySingular` | `navigation.closeExperience()` (`back()`, or `dismissTo(origin)`) | Canonical, complete (Stage 4) |
+| `/product/[id]/photos`, `edit`, `collage` | `formSheet` in stack #3, pushes in stack #4 | `back()`, guarded while dirty | Complete (Stage 4) |
 | `/freelance`, `/recover` | tab | – | Complete |
 | `/freelance/new`, `/recover/new` | inside cockpit sheet (`CreateFrame`) | Back calls `push(backHref)`; done calls `replace(doneHref)` | Not a guided flow |
 | `/build`, `/build/new` | tab, cockpit | – | Placeholder |
@@ -394,13 +391,14 @@ Predicted failure modes (experiment E9 confirms which one happens):
 
 **5. Inconsistent navigation intentions.** **[Code]**
 
-- A Sell item opens in three places: `/product/:id` (board), the legacy `/sell/items/:id` (Already Listed), and `/opportunities/:id` (Home, legacy cards).
-- `Opportunity` and `SuggestedAction` in `app/src/api/types.ts` do not expose the Sell item id. Only `SellItemView.opportunity_id` exists.
+- A Sell item opened in three places: `/product/:id` (board), the legacy `/sell/items/:id` (Already Listed), and `/opportunities/:id` (Home, legacy cards).
+- `Opportunity` and `SuggestedAction` in `app/src/api/types.ts` did not expose the Sell item id. Only `SellItemView.opportunity_id` existed.
+- **Stage 4** (done, device-accepted 2026-10-14): the API exposes a nullable `sell_item_id`, and every Sell entry point goes through `navigation.openProduct` or `navigation.openMission` to `/product/:sellItemId`. See the Stage 4 section.
 - "Close" is implemented as `back()`, `dismissTo('/sell')`, `replace('/sell')`, `push(backHref)`, `push(areaHref)` and `push('/')`.
 - "Finish" is `dismissTo('/sell')` for Sell and `replace(doneHref)` elsewhere.
 - Resume is a module global plus an effect.
 - The tests in `cockpit-scene.test.ts`, `sell.test.ts` and `product-detail.test.ts` assert these exact router strings.
-- **Stage 3** (done, device-accepted 2026-10-13): for Sell creation, start, resume, finish and close each have one coordinator intent. Already Listed no longer lands on the legacy page. The resume global is gone. The cover tests were replaced by planner tests (`navigation.test.ts`) and router tests that run those plans through Expo Router's `StackRouter` (`app-shell.test.ts`). The Home and legacy-card entry points are Stage 4.
+- **Stage 3** (done, device-accepted 2026-10-13): for Sell creation, start, resume, finish and close each have one coordinator intent. Already Listed no longer lands on the legacy page. The resume global is gone. The cover tests were replaced by planner tests (`navigation.test.ts`) and router tests that run those plans through Expo Router's `StackRouter` (`app-shell.test.ts`). The Home and legacy-card entry points moved in Stage 4.
 
 **6. Missing lifecycle coordination and unsaved-input safeguards.** **[Code]**
 
@@ -410,7 +408,8 @@ Predicted failure modes (experiment E9 confirms which one happens):
 - Product editor drafts are discarded on swipe.
 - In `sell/setup/[id].tsx`, `exit()` calls `saveIdentity(false).then(() => leave())` and `saveDetails(false).then(() => leave())`. Their `run()` catches the error, so the flow leaves even when the save failed. The typed name or details are lost. `saveEstimate` and `saveDescription` do check the result.
 - `finish` awaits a full `refresh()` (invalidating and refetching every product query) before closing, even though `rememberSellItem` already updated the board.
-- **Stage 3** (done, device-accepted 2026-10-13): the `(app)` stack's `onFinishTransitioning` is consumed by the coordinator. Identity and Details exits stay open when the save fails (T13). Finish no longer waits for `refresh()`. The rest of this list (editor guards) is Stage 4.
+- **Stage 3** (done, device-accepted 2026-10-13): the `(app)` stack's `onFinishTransitioning` is consumed by the coordinator. Identity and Details exits stay open when the save fails (T13). Finish no longer waits for `refresh()`.
+- **Stage 4** (done, device-accepted 2026-10-14): Edit Photo, Collage and the product editors ask before discarding, from Close, a swipe or Android back (`usePreventRemove`, `allowSwipeDismissal`). See the Stage 4 section.
 
 **7. Per-tab scroll and detent memory.** **[Code]**, effect **[Predicted]**
 
@@ -443,7 +442,7 @@ Target route map **[Proposal]**. Exact paths are settled in the stage that build
 | `opportunities/[id]` | Top-level detail | `fullScreenModal` | card |
 | `create/sell/{new, setup/[id], listed}` | Guided creation | `fullScreenModal` on the group, `animation: 'none'` inside | card |
 | `settings/*`, `progress/*`, `opportunities/index` | Secondary | `fullScreenModal` with its own nested stack | card |
-| `sell/items/[id]/*` | Legacy | redirect to `product/[id]` | redirect |
+| `sell/items/[id]/*` | Legacy | redirect to `product/[id]` | redirect (done, Stage 4) |
 
 With these declared, `AppShell` and `PhoneShell` are no longer used on iOS phone. Each secondary page draws its own header and Close button.
 
@@ -508,7 +507,7 @@ Examples: product value, description, listings.
 - **Closes:** Done or Save saves and closes. Cancel or swipe closes, with confirmation when dirty.
 - **Returns to:** its parent, which is not rebuilt.
 - **Nested navigation:** content swap, or a push inside the same sheet.
-- **Unsaved state:** a dirty flag guards Close, swipe and back **[Decision]**. Routes use `usePreventRemove`. React Native `Modal` sheets use `onRequestClose` or are moved to a router `formSheet`. Choose per editor during Stage 4.
+- **Unsaved state:** a dirty flag guards Close, swipe and back **[Decision]**. Routes use `usePreventRemove`. React Native `Modal` sheets use `onRequestClose` or are moved to a router `formSheet`. **As built in Stage 4:** the product editors are one RN `Modal` (`pageSheet`). Each form reports dirty to the `Editor`, which sets `allowSwipeDismissal={!dirty && !listingAdd}` and routes Close, the dismiss attempt and Android back through one `leave()`.
 - **iOS / web:** native sheet / dialog.
 
 ### 5.6 Complex editor
@@ -521,7 +520,7 @@ Examples: Edit Photo, collage.
 - **Closes:** Save then `back()`. Back or Close confirms when dirty.
 - **Returns to:** the immediate parent.
 - **Nested navigation:** further pushes in the same stack. System presentations as needed.
-- **Unsaved state:** `usePreventRemove(dirty)`. When it is hosted in a swipe-dismissable sheet, it also turns off the host sheet's gesture while dirty (`navigation.getParent()?.setOptions({ gestureEnabled: !dirty })`).
+- **Unsaved state:** `usePreventRemove(dirty)`. When it is hosted in a swipe-dismissable sheet, the host sheet's gesture is off for as long as the editor is open, dirty or not. **As built (Stage 4 finalization):** the host's layout derives that from the focused child route (`photosSheetGestureEnabled`), not from `setOptions` in the editor, and the editor has no swipe-back of its own.
 - **iOS / web:** push in a sheet, or full screen / page.
 
 ### 5.7 System-owned presentation
@@ -616,15 +615,15 @@ The shared rules: Back means the previous step or screen. Close means dismiss th
 ### T5. Product Detail → Photos → Edit Photo → Back (no native wait)
 
 1. Push `photos` (a `formSheet` in stack #3). Push `edit` in stack #4.
-2. Edit declares `usePreventRemove(dirty)`, and while dirty sets `gestureEnabled: false` on the Photos sheet.
-3. Save calls `back()` to Photos. Back or Close while dirty asks "Discard changes?". Edge swipe behaves the same.
+2. Edit declares `usePreventRemove(dirty)`. While `edit` or `collage` is on top, the Photos sheet's `gestureEnabled` is false, and the editors themselves have `gestureEnabled: false` and `fullScreenGestureEnabled: false`. **As built (Stage 4 finalization):** this is the host layout's rule, for clean editors too.
+3. Save calls `back()` to Photos. Back or Close while dirty asks "Discard changes?". Keep editing stays. Discard goes back one level, to Photos. A drag on the sheet can never close editor and Photos together.
 4. Closing Photos calls `back()` to Product Detail, which is not rebuilt. Photo order and cover changes are already committed through `rememberSellItem`.
 
 ### T6. Home → Mission detail → Home (no native wait)
 
-1. `openMission({ missionId, sellItemId })` from Home. If `sellItemId` is present, Product Detail opens instead **[Decision]**. This needs an API field (Stage 4).
+1. `openMission({ missionId, sellItemId })` from Home. If `sellItemId` is present, Product Detail opens instead **[Decision]**. **As built in Stage 4:** `navigation.openMission(id, { sellItemId, origin? })`. The id comes from the API's `sell_item_id`, never from the client. Without one, the generic `/opportunities/:id` opens. The route is `/product/:sellItemId?origin=home`.
 2. The detail is a `fullScreenModal` over the cockpit. There is no tab switch, wrapper swap or remount.
-3. Close calls `back()`. Home's scroll position, detent and local filter are unchanged.
+3. Close calls `back()`. Home's scroll position, detent and local filter are unchanged. **As built:** Product Detail's Close is `navigation.closeExperience()`. The origin is the tab underneath, so it is `back()` and no tab switch.
 4. In-page links to other areas use `closeExperience` and then an explicit tab switch, never `push(areaHref)`.
 
 ### T7. Profile → Skills & Preferences → Edit → Return (no native wait)
@@ -653,7 +652,7 @@ Not built yet; same convention as T7. `openProgress()` presents a `fullScreenMod
 1. `unstable_settings.initialRouteName = '(tabs)'` in `(app)/_layout.tsx` makes Expo Router build `(tabs)` underneath, so the cockpit exists. (Stage 2 uses the current name, `anchor`. Expo Router 57 reads `anchor ?? initialRouteName`.)
 2. The detail opens without an origin param.
 3. Close calls `back()` to `(tabs)`. If the tab underneath is not the category tab, switch to it after native settle.
-4. Legacy `/sell/items/:id` links redirect to `/product/:id`.
+4. Legacy `/sell/items/:id` links redirect to `/product/:id`. **As built in Stage 4:** `app.json` redirects (also for `edit` and `collage`, which land on Product Detail).
 
 ### T11. Switching tabs with no top-level experience (no native wait)
 
@@ -672,7 +671,7 @@ Not built yet; same convention as T7. `openProgress()` presents a `fullScreenMod
    - **Pending** means the coordinator's own plan is waiting for a settle. Any intent then is ignored (`intent.ignored reason=pending`). Starting creation while creation is open is ignored too (`reason=creation-open`).
    - **Busy** means the `(app)` route list changed outside a plan (a Close button, a card tap, a page that just mounted) and its settle has not arrived. The first intent then is deferred (`intent.deferred`) and runs on that settle (`intent.resumed`). A second one is ignored. This is what makes `/opportunities/new?mode=sell` wait for its own present before closing.
    - Both clear only on `onFinishTransitioning`. There is no `pageFocused` fallback and no timer. If a settle never arrives, the next `(app)` transition's settle clears them (see the Stage 3 risks).
-   - `dangerouslySingular` is Stage 4 (`openProduct`).
+   - **As built in Stage 4:** `product/[id]` has `dangerouslySingular`, so a second push of the same item moves it to the top instead of stacking. The coordinator already ignores that request (`reason=already-open`), so singular only covers links outside it. A different product tapped while one is presenting is ignored (`pending`).
 
 ### T13. Failed save during a creation exit
 
@@ -692,12 +691,14 @@ type CreationKind = 'sell' | 'sell-listed';
 type Intent =
   | { type: 'startCreation'; kind: CreationKind }
   | { type: 'resumeCreation'; kind: 'sell'; itemId: number }
+  | { type: 'openProduct'; itemId: number; origin?: MainTab }                                  // Stage 4. A Sell item id, never an opportunity id
+  | { type: 'openMission'; missionId: number; sellItemId?: number | null; origin?: MainTab }   // Stage 4. A sellItemId opens Product Detail
   | { type: 'finishCreation'; feedback?: string }
   | { type: 'closeExperience' };
 
 type NavSnapshot = {
   tabUnderneath: MainTab | null;
-  topLevel: { route: string; origin: MainTab | null } | null; // origin from the route's (or its focused page's) params
+  topLevel: { route: string; origin: MainTab | null; id: string | null } | null; // origin and id from the route's (or its focused page's) params
   pending: boolean;
   nativeSettle: boolean; // iOS only. Elsewhere steps run back to back.
 };
@@ -719,12 +720,16 @@ export const navigation: {
   nativeSettled(): void;                    // (app) onFinishTransitioning
   startCreation(kind?: CreationKind): void;
   resumeCreation(kind: 'sell', itemId: number): void;
+  openProduct(itemId: number, origin?: MainTab): void;                                          // Stage 4
+  openMission(missionId: number, options?: { sellItemId?: number | null; origin?: MainTab }): void; // Stage 4
   finishCreation(feedback?: string): void;
   closeExperience(): void;
 };
 ```
 
-Differences from the proposal below: a module singleton instead of a `useNavigation()` hook (screens call `navigation.startCreation(…)` directly, and nothing needs React state), `dismissTo` instead of `switchTab` (section 7), and an expected top on each wait so an interrupted handoff aborts instead of stacking. The other intents (`openProduct`, `openMission`, `openProfile`, `openProgress`, `switchTab`) are later stages.
+Differences from the proposal below: a module singleton instead of a `useNavigation()` hook (screens call `navigation.startCreation(…)` directly, and nothing needs React state), `dismissTo` instead of `switchTab` (section 7), and an expected top on each wait so an interrupted handoff aborts instead of stacking. Stage 4 added `openProduct` and `openMission` (below). The other intents (`openProfile`, `openProgress`, `switchTab`) are later stages.
+
+Detail intents (Stage 4) **[Code]**: nothing open means one push. Another top-level page open means `back`, wait for the settle, then push, because a top-level modal is never replaced. Creation open means ignore (`creation-open`): its X owns the save or discard decision. The same product already open means ignore (`already-open`). Origin is the explicit one, else the open page's, else the tab underneath, else Sell for a product and Home for a mission. Dev log: `intent.openProduct` or `intent.openMission`, then `detail.presented` after the settle.
 
 The original proposal, kept for the later stages **[Proposal]**:
 
@@ -1259,6 +1264,95 @@ Predicted risks **[Predicted]**:
 - **Acceptance:** journeys C and D. Deep links to old item URLs still work.
 - **Risk:** medium.
 
+Status: **done, device-accepted 2026-10-14** (iPhone 16 Pro). Implemented 2026-10-13. The editor and Photos fixes below, and the native Photos list, passed the device checks recorded in their sections.
+
+What was built **[Code]**:
+
+- **API.** `Opportunity::sellItemId()` returns the id of the `sell_item` playbook's item, or `null` when the mission is not a Sell item, the item is gone, or the item belongs to another user (the last case logs `opportunity.sell_item.owner_mismatch`). `OpportunityResource` (so the detail too) and the Home `suggested_actions` rows expose it as `sell_item_id`. The list, the detail and Home eager-load `sellItem`, so there is one query however many missions. A mission that is not a `sell_item` playbook costs no query. Tests: `OpportunitySellItemIdTest` (9, including the id sequences differing, a stale item, another user's item, 403, and the query count).
+- **Coordinator.** `openProduct` and `openMission` as in section 9. `NavSnapshot.topLevel` has an `id`. The settle log for a detail is `detail.presented`.
+- **Entry points.** Home (featured action, action lines, Upcoming), the Sell board (items use `openProduct`, legacy cards use `openMission`), `AreaList`, Freelance, the All activity rows (a Sell row opens its product through the coordinator, which closes the secondary modal first), and the mission detail screen itself (an old link to a Sell mission opens its product). Product Detail's Close is `navigation.closeExperience()`.
+- **Legacy.** `app.json` redirects `/sell/items/[id]`, `…/edit` and `…/collage` to `/product/[id]`. Removed: `(tabs)/sell/items/[id]/*`, the `background` routes and `photos/_layout`'s `background` screen, `lib/sell-background-sheet.ts`, `leaveSell`, `components/listing-photo.tsx` and the legacy branch of `itemLeaf`. `edit.tsx` and `collage.tsx` moved into `product/[id]/photos/` with `git mv`. Background removal in Edit Photo is untouched.
+- **Guards.** `lib/discard.ts` (`createDiscardGuard`: one dialog at a time, `isDirty`), `lib/use-discard-guard.ts` (`usePreventRemove`, then leave through a state change) and `confirmDiscard` ("Discard changes?", Keep editing, Discard). Edit Photo and Collage use the hook, with `leave()` after a save. A failed save keeps the screen open, as before. The product editors report dirty per form to `Editor`, which also ignores Close while a save is in flight.
+- **Tests.** 96 frontend tests: `navigation.test.ts` (30), `app-shell.test.ts` (new: Product Detail through `StackRouter`, legacy redirects, route tree without the legacy pages), and `discard.test.ts` (7). The source-string tests for the removed files are gone.
+
+Deviations **[Proposal]**:
+
+- A redirect cannot carry a query string, so `/sell/items/4/edit?photo=9` lands on Product Detail, not on that photo.
+- The guard leaves in an effect after a state change, not by dispatching inside the callback (a stale `preventRemove` would intercept it again).
+- `dangerouslySingular` is not covered by an automated test: loading Expo Router's `StackClient` under `tsx` needs React Native. It is a static prop.
+
+Predicted risks **[Predicted]**:
+
+- ~~Whether a swipe-back on Edit Photo, or a drag on the Photos sheet, calls the discard callback.~~ Superseded by the finalization section: the editors have no swipe-back and the sheet is not draggable while one is open.
+- A dirty product editor on `allowSwipeDismissal={false}`: the swipe is an attempt that calls `onRequestClose`. Not yet seen on a device.
+- `dangerouslySingular` re-adds a route in place if it is ever hit. Expo's own comment warns that this can freeze RNS screens. The coordinator makes that path unreachable from the app.
+- A mission screen opened by an old link to a Sell mission shows "Opening your item" and hands off like Continue Setup (close, settle, push). Same mechanism, not run.
+
+#### Stage 4 finalization — Photos editors and gestures
+
+Status: **device-accepted 2026-10-14**. Retest 1 passed for B to G (editors, dirty and Discard, Collage, parent Photos dismissal and restoration, cockpit and Product Detail stable) and failed for the Photos horizontal swipe, which the native list below resolved. A clean editor cannot be swiped down, kept on purpose: editors always use explicit Back/Close and only the Photos overview supports sheet dismissal gestures.
+
+Device report that triggered it: (A) a swipe down on Edit Photo closed the editor and Photos together. (B) A right swipe on the Photos overview shifted the page horizontally.
+
+Hierarchy **[Code]**: Product Detail (top-level) > Photos overview (a `formSheet` owned by Product Detail, stack #3) > Edit Photo / Edit Collage (pushes in stack #4, inside that sheet). One dismissal removes only the level the user is on.
+
+Root causes:
+
+- **A [Code, from the sources].** The editor is not a native presentation. The only thing UIKit can dismiss is the sheet. `onNativeDismissCancelled` in `NativeStackView.native.js` dispatches `POP` with `source: <photos route key>` on stack #3, so a drag targets `photos`, not the editor. Clean editor: the drag dismissed the whole sheet. Dirty editor: `usePreventRemove` caught it, and the old `useDiscardGuard` replayed `data.action` on Discard, which was that same pop of `photos`.
+- **B [Not proven].** The RNS iOS gating (`shouldReceiveTouch` in `RNSScreenStack.mm`) rejects stack pop gestures when the stack has fewer than two screens or the top screen is modal, and the reorder gesture is vertical only. So from the sources the Photos overview should not start a horizontal pop. Left unexplained: expo-router forces `fullScreenGestureEnabled: true` for vertical (sheet) presentations, and on iOS 26 RNS defaults full-screen swipe to on. The fix removes every horizontal navigation recogniser from the Photos subtree by configuration. Whether that was the trigger needs the device. If A passes and B does not, the next suspect is outside navigation (the SwiftUI glass `AddMenu`/Close controls).
+
+What changed **[Code]**:
+
+- `app/src/lib/photos-nav.ts`: `photosStackGestures` and `photosSheetGestureEnabled`.
+- `product/[id]/_layout.tsx`: the `photos` sheet's `gestureEnabled` follows the focused child route. Product Detail, the cockpit and unrelated routes are untouched.
+- `photos/_layout.tsx`: `index`, `edit` and `collage` have no swipe-back (`gestureEnabled: false`, `fullScreenGestureEnabled: false`).
+- `lib/use-discard-guard.ts`: Discard and `leave()` dispatch `GO_BACK` from the editor. They no longer replay the blocked action. Adds `editor.leave.blocked`, `editor.leave.answer` and `editor.leave.back` dev logs.
+- Photos is kept alive under the editor and Product Detail is not remounted, as before (a push in stack #4).
+
+Presentation tradeoff **[Decision]**: the editors fill the sheet's full-height detent, not the whole screen. Edge to edge would need them as `fullScreenModal` siblings of `photos` in stack #3, which stacks a second native modal over the sheet. That is the structure the cockpit and E3 rules avoid, so it was not done without approval.
+
+Device retest 1 (2026-10-14): editors and dirty/Discard passed, the sheet is draggable again after an editor, and a clean editor can't be swiped down (kept on purpose: editors always use explicit Back/Close, only the Photos overview supports sheet dismissal). **Problem B (sideways swipe shifts the Photos overview) still failed**, with `[RNScreens] FormSheet with ScrollView expects at most 2 subviews. Got 5 for container: RNSSafeAreaViewComponentView` in Metro.
+
+Form-sheet layout investigation **[Code, from the sources]**:
+
+- The warning is in `RNSScreenContentWrapper.mm` (`coerceChildScrollViewComponentSizeToSize:`). `ScreenContentWrapper` wraps every screen, and on iOS 26 a `SafeAreaView` sits inside it. A wrapper walks up `parentViewController` and registers itself with the first form-sheet `RNSScreen` above it, so the screens inside the Photos stack (overview, Edit, Collage) each become the sheet's content wrapper when they appear. The sheet then looks for a `ScrollView` that is a direct child of that SafeAreaView and, if it finds one, forces its frame to the sheet size (minus `subviews[0]` when it is at index 1). More than 2 children means the ScrollView is at neither index and RNS falls back to `setFrame:` of the whole sheet.
+- Which screen warns is not provable from the message. By count, none of the Photos screens can have 5 children: the overview and Edit Photo each have one root `View` (it has a `backgroundColor`, so Fabric keeps it as a native view, confirmed in `ViewShadowNode.cpp`, `formsView`), and Collage has one child, a ScrollView. The Oct 12 Metro log also shows the same pair of warnings at cold start, before any Photos screen exists. So at least that source is not Photos. It is not a cockpit change either (the cockpit was not touched). Not identified further.
+- `collapsable: false` is **not** relevant to the Photos screens: their roots are already native views. It was not added.
+- Collage was the one screen with a ScrollView as the direct child of the sheet's content. RNS therefore resized it to the full sheet with no top inset, which is why its "Pictures" Back label sat against the grabber. Fixed with a root `View` (background, 16pt top padding). Behaviour and the Back control are unchanged.
+- The row reorder pan used the default activation, so a sideways swipe that started on the 36pt handle activated it: the row lifted, `scrollEnabled` turned off (the list relaid out), and haptics fired. `commit` is a no-op for an unchanged order, so no request was sent. Fixed with `activeOffsetY([-10, 10])` and `failOffsetX([-20, 20])`.
+- A vertical ScrollView bounces even when its content fits (`alwaysBounceVertical` defaults to true), so a diagonal swipe moved a short list. Set to `false` on the overview.
+- Dev probes added to the overview: `photos.list.layout` (the ScrollView's `y` and `height`), `photos.list.scrollBegin` and `photos.reorder.lift`. `y` near 0 with the full sheet height would mean RNS is resizing the list (header covered). A `scrollBegin` or `lift` during a sideways swipe says which gesture took it. These are diagnostics. If B still fails they say where to look.
+
+#### Photos overview as a native SwiftUI list
+
+Status: **done, device-accepted 2026-10-14** (iPhone 16 Pro).
+
+Why: the custom ScrollView plus pan-gesture reorder kept showing layout and gesture problems inside the form sheet, and several rounds of config fixes did not settle them.
+
+Feasibility **[Code, from the installed `@expo/ui` 57.0.22]**:
+
+- No new dependency and no rebuild. `@expo/ui` was already installed and compiled in (Pods lock: `ExpoUI (57.0.22)`; the app already uses its `Host`, `Button` and `Menu`). `List`, `List.ForEach` (`onMove`, `onDelete`), `SwipeActions`, `RNHostView` and the `environment('editMode', …)` modifier are all in that build, so a Metro reload is enough.
+- Reorder: `List.ForEach` forwards SwiftUI's `onMove(from:to:)` as `{ sourceIndices, destination }`. `environment('editMode', 'active')` is a constant binding, so the system reorder handles show while it is active. `applyNativeMove` in `lib/photos-list.ts` maps the event (destination is an insertion point in the pre-move list) to the new order, and the existing `reorderSellPhotos` path persists it (a failed request restores the previous order and shows the error).
+- Thumbnails: Expo UI's `Image` takes a file URL and reads it with `Data(contentsOf:)` on the main thread, which is wrong for remote photos of up to 2 MB. The thumbnail is therefore a React Native `Image` hosted in the row by `RNHostView` (async load and cache, downscaled to 56 pt, `sunken` colour as the placeholder).
+- Extra scroll view: the SwiftUI list is the only scroller in the sheet. Its collection view is not a `RCTScrollViewComponentView`, so the RNS form-sheet ScrollView lookup (see the layout investigation above) finds nothing in the Photos overview and cannot resize it by construction. The header stays in the React Native tree above the `Host`.
+- Delete: not the red edit-mode minus buttons (no `onDelete` on `List.ForEach`). A trailing swipe action "Delete" opens the existing confirmation, and it is unavailable while editing.
+
+Behaviour:
+
+- Normal mode: thumbnail, label (`shotLabel`), a star (filled for the cover, tap to set the cover through `coverSellPhoto`, no request for the current cover), a chevron. A row tap opens Edit Photo, or Edit Collage for a collage (`rowHref`).
+- Edit mode (the header's Edit, shown for two or more photos): stars and chevrons are hidden, rows do not navigate, and the button reads Done. Deleting down to one photo leaves edit mode.
+- Empty: "No photos yet." with a prominent Add photo menu (library, camera, collage). The header `+` menu is unchanged.
+- The custom Gesture Handler/Reanimated reorder, its haptics, and the earlier ScrollView layout probes are removed from this screen.
+- Unchanged: the sheet gesture rules in `lib/photos-nav.ts`, the editors, the dirty guard, upload and compression, the cache updates.
+
+Device results (2026-10-14, iPhone 16 Pro) **[Device]**: all twelve acceptance steps passed. Photos opens as the native list with correct thumbnails, repeated horizontal swipes do not shift the header or rows, Edit shows Apple's reorder handles, a reorder persists, Done restores the normal list, the star changes the cover, a row opens Edit Photo and Back returns to the same overview, the sheet still dismisses vertically, swipe-to-delete works, and the empty state works. The `[RNScreens] FormSheet with ScrollView expects at most 2 subviews. Got 5` warning no longer appears. It disappeared when the Photos ScrollView was replaced, so that ScrollView was the source after all. The earlier layout investigation could not prove this from the sources, and the startup warning in the Oct 12 log came from older code and is not explained by it. No UIKit presentation or layout errors were seen.
+
+Before the device run, the unverified points were: `RNHostView` images in list rows, row taps against the star button, the reorder handles and drop animation, and native vertical drag-to-dismiss with a list under the finger. All passed.
+
+Tests: `lib/photos-list.test.ts` (9): native move mapping (down, up, no-op, several rows, bad input, cover flag follows the photo), Edit/Done, row href and the edit-mode block, the star, and the iOS-only native list. Add, delete, upload and the editors are unchanged and covered by the earlier tests and the device steps.
+
+Tests: 104 frontend tests (8 new in `app-shell.test.ts`: editors push inside stack #4 and leave stack #3 and the (app) stack untouched, Close pops only the editor, the discard action pops only the editor, closing Photos returns to Product Detail, the sheet gesture rule, the stack gesture config, the layouts use them). Not testable without a device: that UIKit honours the options, that `usePreventRemove` fires for a sheet drag, the Keep/Discard dialog sequence, save and failed-save inside the editor (they need React Native), and B itself.
+
 ### Stage 5 — Other app sections
 
 - **Scope:**
@@ -1294,7 +1388,7 @@ Acceptance journeys. Every one needs the device. The plan for each is automatabl
 | --- | --- | --- |
 | A | Sell, Sell something, category, Identity through Description, Finish | One continuous presentation. Back on Sell with the item on the board. No detail page. |
 | B | Sell, product draft, Continue setup | Product Detail fully dismisses, then creation opens at the saved step. No flash. 20 repeats. |
-| B2 | Home, Sell mission (after Stage 4), Continue setup, Finish | Back on Home. Sell board updated. |
+| B2 | Home, Sell mission, Continue setup, Finish | Back on Home. Sell board updated. |
 | C | Product Detail, Photos, Edit Photo, change something, swipe back | Discard confirmation. Photos and Product Detail intact. |
 | D | Home, Recover mission, Close | Home with the same scroll and detent. No tab switch. |
 | E | Scroll Home, move the detent, switch to Sell and back, re-tap | Current behaviour documented. Target after the cockpit track. |
@@ -1329,10 +1423,10 @@ For each journey, check: one `CockpitShell` mount, one `(tabs)` route, the tab b
 | Cockpit | `app/src/components/cockpit-shell.tsx` (`CockpitShell`, `AreaStack`), `menu-sheet.tsx` (`MenuSheet`), `cockpit-context.tsx`, `score-hero.tsx` (`ScoreHeroView`, `MobileStage`), `hero-wash-host.tsx` (`NativeTabWash`, `HeroWashSlot`), `app/src/lib/cockpit-scene.ts` |
 | Swift lift | `app/modules/nolume-sheet-tab-bar/ios/NolumeSheetTabBar.swift`, `NolumeSheetTabBarSubscriber.swift` |
 | Shell | `app/src/lib/app-shell.ts` (`appWrapper`, `secondaryPresentation`), `app/src/components/shell.tsx` (`AppShell`, `FocusShell`), `moves.tsx` (`Sheet`, `CockpitFrame`) |
-| Navigation | `app/src/lib/navigation.ts` (coordinator), `app/src/lib/nav-log.ts` (dev logging), `app/app.json` (`expo-router` redirects) |
-| Sell | `(tabs)/sell/index.tsx`, `items/[id]/*`, `(app)/create/sell/_layout.tsx`, `new.tsx`, `listed.tsx`, `setup/[id].tsx`, `app/src/components/sell-flow.tsx`, `app/src/lib/sell-cache.ts` |
+| Navigation | `app/src/lib/navigation.ts` (coordinator), `app/src/lib/nav-log.ts` (dev logging), `app/src/lib/discard.ts` and `use-discard-guard.ts` (unsaved-change guard), `app/app.json` (`expo-router` redirects) |
+| Sell | `(tabs)/sell/index.tsx`, `(app)/create/sell/_layout.tsx`, `new.tsx`, `listed.tsx`, `setup/[id].tsx`, `app/src/components/sell-flow.tsx`, `app/src/lib/sell-cache.ts` |
 | Product | `product/[id]/index.tsx`, `photos/*`, `app/src/components/product-page.tsx`, `editing-sheet.tsx`, `app/src/lib/product-detail.ts` |
 | Missions and areas | `(tabs)/index.tsx`, `freelance/*`, `recover/*`, `build/*`, `opportunities/*`, `app/src/components/create-flow.tsx`, `feedback.tsx` |
 | Secondary | `(app)/(secondary)/_layout.tsx`, `settings.tsx`, `progress.tsx`, `friends.tsx`, `opportunities/*`; `(app)/discover.tsx` (redirect) |
-| Tests | `app/src/lib/navigation.test.ts`, `app-shell.test.ts`, `cockpit-scene.test.ts`, `sell.test.ts`, `product-detail.test.ts` |
+| Tests | `app/src/lib/navigation.test.ts`, `app-shell.test.ts`, `discard.test.ts`, `cockpit-scene.test.ts`, `sell.test.ts`, `product-detail.test.ts`; `api/tests/Feature/Api/OpportunitySellItemIdTest.php` |
 | Library source | `node_modules/react-native-screens/ios/RNSScreenStack.mm`, `RNSScreen.mm`, `node_modules/expo-router/build/react-navigation/native-stack/views/NativeStackView.native.js`, `expo-router/build/global-state/getNavigationAction.js`, `routingQueue.js`, `layouts/StackClient.js`, `native-tabs/types.d.ts`, `react-native/React/Fabric/Mounting/ComponentViews/Modal/RCTModalHostViewComponentView.mm` |

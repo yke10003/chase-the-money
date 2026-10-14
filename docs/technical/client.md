@@ -61,11 +61,12 @@ On boot, `GET /api/v1/me` decides the session.
 | `/onboarding` | Target, work, skills, experience, approach, right now. No app navigation. Ends on `/?welcome=1` |
 | `/` | Home, with a strip into the four cockpits once anything exists |
 | `/sell`, `/freelance`, `/build`, `/recover` | Cockpits. See [cockpits](../product/cockpits.md) |
-| `/sell/new`, `/sell/setup/[id]`, `/sell/listed`, `/sell/items/[id]` | Sell item setup, an already-listed shortcut, and the item. See [sell](../product/sell.md). |
+| `/sell/new`, `/sell/setup/[id]`, `/sell/listed`, `/sell/items/[id]` | Redirects (`app.json`) to `/create/sell/…` and `/product/[id]`. See [sell](../product/sell.md). |
 | `/freelance/new`, `/recover/new`, `/build/new` | Cockpit-specific create screens. No category picker. |
 | `/opportunities` | All activity. Not in the navigation. `?start=cost` reviews one expense |
 | `/opportunities/new` | Custom mission, plus cut-a-cost. `?mode=` redirects to the cockpit create route |
-| `/opportunities/[id]` | Detail. Back goes to the cockpit that owns it |
+| `/product/[id]` | Product Detail for a Sell item, by the item's own id. Missions that are Sell items open here, using `sell_item_id` |
+| `/opportunities/[id]` | Detail for other missions. A Sell mission redirects to its product. Back goes to the cockpit that owns it |
 | `/discover` | Redirects into the cockpit that now owns that tool |
 | `/progress` | Progress. Links to All activity |
 | `/friends` | Placeholder. No fake data |
