@@ -1,4 +1,43 @@
+import { majorToMinor } from '@/lib/money';
+import { normalizeWebUrl } from '@/lib/web-url';
+
 export type ProductFact = { label: string; value: string };
+
+/** The product name, separate from the marketplace listing title. */
+export function productNameInput(name: string): { name: string } | { error: string } {
+  const trimmed = name.trim();
+
+  if (trimmed === '') {
+    return { error: 'Name the item first.' };
+  }
+
+  if (trimmed.length > 120) {
+    return { error: 'Keep the name under 120 characters.' };
+  }
+
+  return { name: trimmed };
+}
+
+/** Link, price and sold/asking for one similar listing. The link is normalized first. */
+export function comparableDraft(input: {
+  url: string;
+  amount: string;
+  state: 'sold' | 'asking' | 'unknown';
+}): { url: string; amount_minor: number; state: 'sold' | 'asking' | 'unknown' } | { error: string } {
+  const url = normalizeWebUrl(input.url);
+
+  if ('error' in url) {
+    return url;
+  }
+
+  const amount = majorToMinor(input.amount);
+
+  if (amount == null) {
+    return { error: 'Enter the price you saw.' };
+  }
+
+  return { url: url.url, amount_minor: amount, state: input.state };
+}
 
 /** Saved order stays put. The gallery opens on the cover within that order. */
 export function coverIndex(photos: Array<{ is_cover: boolean }>): number {

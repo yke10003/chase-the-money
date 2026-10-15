@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-import { journeyIndex, listingDraft, openShot, parseEstimate, shotAfter } from './sell';
+import { planTransition, type Step } from './navigation';
+import { journeyIndex, listingDraft, openShot, parseEstimate, resumeSellSetup, sellCardCue, sellEntry, shotAfter } from './sell';
 
 test('the journey index follows the sell setup order', () => {
   assert.equal(journeyIndex('category'), 0);
@@ -73,6 +74,63 @@ test('Find something opens Money Hunt at the top of the Sell sheet, and a found 
   assert.equal(hunt.includes('router.push'), false);
   // The hunt stays mounted under the modal. A stuck busy Start would greet the user when creation closes.
   assert.ok(hunt.indexOf('setBusy(false)', hunt.indexOf('navigation.resumeCreation')) > 0);
+});
+
+function firstMove(steps: Step[]): string {
+  const step = steps[0];
+
+  if (!step) {
+    return 'none';
+  }
+
+  if (step.op === 'push' || step.op === 'dismissTo') {
+    return `${step.op} ${step.href}`;
+  }
+
+  if (step.op === 'ignore') {
+    return `ignore ${step.reason}`;
+  }
+
+  return step.op;
+}
+
+test('an unfinished product resumes creation, and a finished one opens detail', () => {
+  // Photos, a price, a description and a listing do not decide this. Only setup_done does.
+  assert.equal(sellEntry(false), 'creation');
+  assert.equal(sellEntry(true), 'detail');
+  assert.equal(sellCardCue(false), 'Continue setup');
+  assert.equal(sellCardCue(true), null);
+  assert.equal(resumeSellSetup(null, false), false);
+  assert.equal(resumeSellSetup(4, null), false);
+  assert.equal(resumeSellSetup(4, true), false);
+
+  const sell = { tabUnderneath: 'sell' as const, topLevel: null, pending: false, nativeSettle: true };
+  const home = { ...sell, tabUnderneath: 'home' as const };
+
+  assert.equal(firstMove(planTransition(sell, { type: 'resumeCreation', kind: 'sell', itemId: 17 })), 'push /create/sell/setup/17?origin=sell');
+  assert.equal(firstMove(planTransition(sell, { type: 'openProduct', itemId: 17, origin: 'sell' })), 'push /product/17?origin=sell');
+  assert.equal(firstMove(planTransition(home, { type: 'resumeCreation', kind: 'sell', itemId: 8 })), 'push /create/sell/setup/8?origin=home');
+
+  const fromHome = { ...sell, topLevel: { route: 'create/sell', origin: 'home' as const, id: '8' } };
+  assert.equal(firstMove(planTransition(fromHome, { type: 'closeExperience' })), 'dismissTo /');
+  assert.equal(firstMove(planTransition(fromHome, { type: 'resumeCreation', kind: 'sell', itemId: 8 })), 'ignore creation-open');
+  assert.equal(firstMove(planTransition({ ...sell, pending: true }, { type: 'resumeCreation', kind: 'sell', itemId: 8 })), 'ignore pending');
+});
+
+test('resuming photos keeps the saved shot, and an unkeyed photo does not count as taken', () => {
+  const plan = [
+    { key: 'main', recommended: true, taken: false },
+    { key: 'back', recommended: true, taken: false },
+  ];
+
+  assert.equal(openShot(plan), 'main');
+  assert.equal(openShot(plan.map((shot) => (shot.key === 'main' ? { ...shot, taken: true } : shot))), 'back');
+
+  const setup = readFileSync(new URL('../app/(app)/create/sell/setup/[id].tsx', import.meta.url), 'utf8');
+  assert.equal(setup.includes('setStep(item.setup_step)'), true);
+  assert.equal(setup.includes('Add similar sale'), true);
+  assert.equal(setup.includes('Copy a research prompt'), true);
+  assert.equal(setup.includes('comparableDraft'), true);
 });
 
 test('starting a sale does not offer another cockpit', () => {

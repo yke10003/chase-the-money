@@ -64,6 +64,7 @@ class HomeController extends Controller
                 'opportunity_title' => $row['opportunity']->title,
                 'opportunity_type' => $row['opportunity']->type->value,
                 'sell_item_id' => $row['opportunity']->sellItemId(),
+                'setup_done' => $row['opportunity']->sellSetupDone(),
                 'expected_on' => $row['opportunity']->expected_on?->toDateString(),
                 'why' => $this->why($row['opportunity'], $row['action']),
             ];

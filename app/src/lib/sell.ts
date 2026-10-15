@@ -1,5 +1,6 @@
 import type { SellItemView } from '@/api/types';
 import { majorToMinor } from '@/lib/money';
+import { navigation } from '@/lib/navigation';
 
 export const JOURNEY = ['category', 'identity', 'photos', 'details', 'research', 'estimate', 'description'] as const;
 
@@ -9,6 +10,35 @@ export function journeyIndex(step: string): number {
   const index = JOURNEY.indexOf(step as JourneyStep);
 
   return index < 0 ? JOURNEY.length - 1 : index;
+}
+
+/**
+ * Where a Sell product opens. `setup_done` is the only signal (`setup_step === 'done'`).
+ * Photos, price, a description, and whether it is listed do not count.
+ * A finished setup that is not listed yet still opens Product Detail.
+ */
+export function sellEntry(setupDone: boolean): 'creation' | 'detail' {
+  return setupDone ? 'detail' : 'creation';
+}
+
+/** The card cue for an unfinished product. Null once setup is done. */
+export function sellCardCue(setupDone: boolean): string | null {
+  return setupDone ? null : 'Continue setup';
+}
+
+/**
+ * Resume creation when setup is unfinished. Returns true when it did, so the caller
+ * keeps its existing detail path for a finished product or a mission with no item.
+ * `setupDone` null means unknown, which stays on that existing path.
+ */
+export function resumeSellSetup(itemId: number | null | undefined, setupDone: boolean | null | undefined): boolean {
+  if (itemId == null || setupDone !== false) {
+    return false;
+  }
+
+  navigation.resumeCreation('sell', itemId);
+
+  return true;
 }
 
 export type EstimateInput =
@@ -52,7 +82,10 @@ export type ShotPlanEntry = {
   skipped?: boolean;
 };
 
-/** The next shot that has not been taken or skipped. Null means photography can move on. */
+/**
+ * The next shot that has not been taken or skipped. Null means photography can move on.
+ * `taken` is set only when a photo's shot key matches. A photo saved without a shot key stays on the item and does not skip this shot.
+ */
 export function openShot(plan: ShotPlanEntry[]): string | null {
   const open = (entry: ShotPlanEntry) => !entry.taken && !entry.skipped;
 

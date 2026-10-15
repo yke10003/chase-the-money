@@ -278,5 +278,98 @@ class SellItemApiTest extends TestCase
             ->assertJsonPath('data.listing_description', null)
             ->assertJsonPath('data.stage', 'ready_to_list')
             ->assertJsonPath('data.next.playbook_key', 'list_item');
+
+        $this->actingAs($user)->patchJson("/api/v1/sell/items/{$id}", [
+            'listing_title' => 'Navy coat, size M',
+        ])->assertOk();
+
+        $before = XpEvent::query()->count();
+        $this->actingAs($user)->patchJson("/api/v1/sell/items/{$id}", [
+            'name' => 'Navy coat',
+        ])->assertOk()
+            ->assertJsonPath('data.name', 'Navy coat')
+            ->assertJsonPath('data.listing_title', 'Navy coat, size M');
+        $this->assertSame($before, XpEvent::query()->count());
+    }
+
+    #[Test]
+    public function a_similar_listing_accepts_a_link_without_a_protocol_and_can_be_edited(): void
+    {
+        $user = User::factory()->create();
+        $other = User::factory()->create();
+        $id = $this->actingAs($user)->postJson('/api/v1/sell/items', [
+            'category' => 'wardrobe',
+            'subcategory' => 'jacket',
+            'name' => 'Coat',
+        ])->assertCreated()->json('data.id');
+
+        $added = $this->actingAs($user)->postJson("/api/v1/sell/items/{$id}/comparables", [
+            'url' => 'vinted.com/abc?id=1#photo',
+            'amount_minor' => 4500,
+            'state' => 'sold',
+        ])->assertOk()
+            ->assertJsonPath('data.comparables.0.url', 'https://vinted.com/abc?id=1#photo')
+            ->assertJsonPath('data.comparables.0.platform', 'Vinted')
+            ->assertJsonPath('data.comparables.0.amount_minor', 4500);
+
+        $comparableId = $added->json('data.comparables.0.id');
+
+        $this->actingAs($user)->postJson("/api/v1/sell/items/{$id}/comparables", [
+            'url' => 'www.grailed.com/listings/2',
+            'amount_minor' => 8000,
+            'state' => 'asking',
+        ])->assertOk()
+            ->assertJsonPath('data.comparables.1.url', 'https://www.grailed.com/listings/2')
+            ->assertJsonPath('data.comparables.1.platform', 'Grailed');
+
+        $this->actingAs($user)->postJson("/api/v1/sell/items/{$id}/comparables", [
+            'url' => 'http://example.com/item',
+            'amount_minor' => 1000,
+            'state' => 'unknown',
+        ])->assertOk()
+            ->assertJsonPath('data.comparables.2.url', 'http://example.com/item');
+
+        $this->actingAs($user)->postJson("/api/v1/sell/items/{$id}/comparables", [
+            'url' => 'javascript:alert(1)',
+            'amount_minor' => 1000,
+            'state' => 'sold',
+        ])->assertStatus(422);
+
+        $this->actingAs($user)->patchJson("/api/v1/sell/items/{$id}/comparables/{$comparableId}", [
+            'url' => 'vinted.com/abc?id=9',
+            'amount_minor' => 5200,
+            'state' => 'asking',
+        ])->assertOk()
+            ->assertJsonCount(3, 'data.comparables')
+            ->assertJsonPath('data.comparables.0.url', 'https://vinted.com/abc?id=9')
+            ->assertJsonPath('data.comparables.0.amount_minor', 5200)
+            ->assertJsonPath('data.comparables.0.state', 'asking');
+
+        $this->actingAs($other)->patchJson("/api/v1/sell/items/{$id}/comparables/{$comparableId}", [
+            'url' => 'vinted.com/nope',
+            'amount_minor' => 1,
+            'state' => 'sold',
+        ])->assertForbidden();
+    }
+
+    #[Test]
+    public function a_photo_without_a_shot_key_does_not_count_as_the_guided_shot(): void
+    {
+        Storage::fake('public');
+        $user = User::factory()->create();
+        $id = $this->actingAs($user)->postJson('/api/v1/sell/items', [
+            'category' => 'wardrobe',
+            'subcategory' => 'jacket',
+            'name' => 'Coat',
+        ])->assertCreated()->json('data.id');
+
+        $this->actingAs($user)->post("/api/v1/sell/items/{$id}/photos", [
+            'photo' => UploadedFile::fake()->image('loose.jpg', 40, 40),
+        ])->assertOk()
+            ->assertJsonPath('data.setup_step', 'photos')
+            ->assertJsonPath('data.photos.0.shot_key', null)
+            ->assertJsonPath('data.photo_plan.0.key', 'main')
+            ->assertJsonPath('data.photo_plan.0.taken', false)
+            ->assertJsonCount(1, 'data.photos');
     }
 }

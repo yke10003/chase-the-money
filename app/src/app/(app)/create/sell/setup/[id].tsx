@@ -21,8 +21,9 @@ import { Button, Field, InlineError, MoneyField, T } from '@/components/ui';
 import { font, space, weight } from '@/design/tokens';
 import { confirmAction } from '@/lib/confirm';
 import { errorMessage } from '@/lib/errors';
-import { formatAmount, majorToMinor, minorToMajorInput } from '@/lib/money';
+import { formatAmount, minorToMajorInput } from '@/lib/money';
 import { navigation } from '@/lib/navigation';
+import { comparableDraft } from '@/lib/product-detail';
 import { copyText, listingDraft, openShot, parseEstimate, shotAfter } from '@/lib/sell';
 import { forgetSellItem, rememberSellItem, startSellWrite } from '@/lib/sell-cache';
 import { useRefreshProduct } from '@/state/query';
@@ -665,7 +666,7 @@ export default function SellSetupScreen() {
             <T variant="small" color={color.ink3}>{comparable.platform} · {comparable.url}</T>
           </View>
         ))}
-        <Field label="Link to a similar sale" value={link} onChangeText={setLink} autoCapitalize="none" placeholder="https://" />
+        <Field label="Link to a similar sale" value={link} onChangeText={setLink} autoCapitalize="none" placeholder="vinted.com/…" />
         <MoneyField label="Price" value={price} onChangeText={setPrice} />
         <View style={{ flexDirection: 'row', gap: space.sm }}>
           <View style={{ flex: 1 }}><ChoiceBlock label="Sold" selected={saleState === 'sold'} onPress={() => setSaleState('sold')} /></View>
@@ -677,15 +678,15 @@ export default function SellSetupScreen() {
   }
 
   async function addComparable() {
-    const amount = majorToMinor(price);
+    const draft = comparableDraft({ url: link, amount: price, state: saleState });
 
-    if (amount == null) {
-      setError('Enter the price you saw.');
+    if ('error' in draft) {
+      setError(draft.error);
       return;
     }
 
     await run(async () => {
-      await kept(() => addSellComparable(id, { url: link.trim(), amount_minor: amount, state: saleState }));
+      await kept(() => addSellComparable(id, draft));
       setLink('');
       setPrice('');
     });

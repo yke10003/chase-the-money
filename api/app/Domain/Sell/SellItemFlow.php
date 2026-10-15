@@ -300,9 +300,54 @@ final class SellItemFlow
 
     public function addComparable(SellItem $item, array $input): SellComparable
     {
-        $url = trim((string) ($input['url'] ?? ''));
+        $parsed = $this->comparableInput($input);
+        $comparable = $item->comparables()->create([
+            ...$parsed,
+            'note' => $this->clean($input['note'] ?? null),
+        ]);
 
-        if (filter_var($url, FILTER_VALIDATE_URL) === false) {
+        Log::info('sell.comparable.added', [
+            'user_id' => $item->user_id,
+            'sell_item_id' => $item->id,
+            'comparable_id' => $comparable->id,
+            'state' => $comparable->state,
+            'platform' => $comparable->platform,
+        ]);
+
+        return $comparable;
+    }
+
+    public function updateComparable(SellItem $item, SellComparable $comparable, array $input): SellComparable
+    {
+        $parsed = $this->comparableInput($input);
+        $comparable->fill($parsed);
+
+        if (array_key_exists('note', $input)) {
+            $comparable->note = $this->clean($input['note']);
+        }
+
+        $comparable->save();
+
+        Log::info('sell.comparable.updated', [
+            'user_id' => $item->user_id,
+            'sell_item_id' => $item->id,
+            'comparable_id' => $comparable->id,
+            'state' => $comparable->state,
+            'platform' => $comparable->platform,
+        ]);
+
+        return $comparable;
+    }
+
+    /**
+     * @param  array<string, mixed>  $input
+     * @return array{url: string, platform: string, amount_minor: int, state: string}
+     */
+    private function comparableInput(array $input): array
+    {
+        $url = WebUrl::normalize((string) ($input['url'] ?? ''));
+
+        if ($url === null) {
             throw ValidationException::withMessages([
                 'url' => 'Paste a link to the similar sale.',
             ]);
@@ -317,23 +362,12 @@ final class SellItemFlow
             ]);
         }
 
-        $comparable = $item->comparables()->create([
+        return [
             'url' => $url,
             'platform' => $this->platform($url),
             'amount_minor' => $amount,
             'state' => $state,
-            'note' => $this->clean($input['note'] ?? null),
-        ]);
-
-        Log::info('sell.comparable.added', [
-            'user_id' => $item->user_id,
-            'sell_item_id' => $item->id,
-            'comparable_id' => $comparable->id,
-            'state' => $state,
-            'platform' => $comparable->platform,
-        ]);
-
-        return $comparable;
+        ];
     }
 
     public function researchPrompt(SellItem $item): string

@@ -49,6 +49,7 @@ import { formatAmount, formatAmountRange } from '@/lib/money';
 import { areaHref, areaOf } from '@/lib/areas';
 import { CERTAINTY_LABEL, certaintyFor, describeProgress, humanizeDates, isGoodOutcome, journeyFor, missionKind } from '@/lib/mission';
 import { navigation } from '@/lib/navigation';
+import { resumeSellSetup } from '@/lib/sell';
 import { useRefreshProduct } from '@/state/query';
 import { useTheme } from '@/state/theme';
 
@@ -71,13 +72,18 @@ export default function OpportunityDetailScreen() {
   });
 
   const sellItemId = detail.data?.data.sell_item_id ?? null;
+  const setupDone = detail.data?.data.setup_done ?? null;
 
-  // An old link to a Sell mission. Product Detail is the one page for a Sell item.
+  // An old link to a Sell mission. Unfinished setup resumes creation. A finished item opens Product Detail.
   useEffect(() => {
-    if (sellItemId != null) {
+    if (sellItemId == null) {
+      return;
+    }
+
+    if (!resumeSellSetup(sellItemId, setupDone)) {
       navigation.openProduct(sellItemId);
     }
-  }, [sellItemId]);
+  }, [sellItemId, setupDone]);
 
   if (!Number.isFinite(id)) {
     return <ErrorState message="That mission link is not valid." />;

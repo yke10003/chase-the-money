@@ -7,6 +7,7 @@ import { dateParts } from '@/lib/dates';
 import { formatAmount, formatAmountRange } from '@/lib/money';
 import { attentionFor, missionGroup } from '@/lib/mission';
 import { navigation } from '@/lib/navigation';
+import { resumeSellSetup } from '@/lib/sell';
 import { useTheme } from '@/state/theme';
 
 type MoneyLine = { text: string; label: string; certainty: 'expected' | 'possible' };
@@ -18,7 +19,11 @@ export function AreaList({ missions }: { missions: Opportunity[]; empty?: string
     <View>
       {missions.map((mission, index) => (
         <View key={mission.id} style={index > 0 ? { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: color.line } : null}>
-          <RecordRow mission={mission} onPress={() => navigation.openMission(mission.id, { sellItemId: mission.sell_item_id })} />
+          <RecordRow mission={mission} onPress={() => {
+            if (!resumeSellSetup(mission.sell_item_id, mission.setup_done)) {
+              navigation.openMission(mission.id, { sellItemId: mission.sell_item_id });
+            }
+          }} />
         </View>
       ))}
     </View>

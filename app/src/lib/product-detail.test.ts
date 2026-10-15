@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-import { coverIndex, itemLeaf, listingPlace, listingStatus, movePhoto, productFacts, samePhotoOrder, shotLabel } from './product-detail';
+import { comparableDraft, coverIndex, itemLeaf, listingPlace, listingStatus, movePhoto, productFacts, productNameInput, samePhotoOrder, shotLabel } from './product-detail';
 
 test('the gallery opens on the cover and keeps the saved order', () => {
   assert.equal(coverIndex([]), 0);
@@ -58,6 +58,44 @@ test('reordering moves the photo and keeps its cover flag', () => {
   assert.equal(listingPlace('Grailed', 'https://www.grailed.com/listings/1'), 'Grailed');
   assert.equal(listingPlace(null, 'https://www.ebay.com/itm/1'), 'ebay.com');
   assert.equal(listingPlace('', 'not a url'), 'Listing');
+});
+
+test('a similar listing link is normalized, and the product name stays off the listing title', () => {
+  assert.deepEqual(comparableDraft({ url: '  vinted.com/abc?id=1#photo  ', amount: '45', state: 'sold' }), {
+    url: 'https://vinted.com/abc?id=1#photo',
+    amount_minor: 4500,
+    state: 'sold',
+  });
+  assert.deepEqual(comparableDraft({ url: 'https://vinted.com/abc', amount: '12.50', state: 'asking' }), {
+    url: 'https://vinted.com/abc',
+    amount_minor: 1250,
+    state: 'asking',
+  });
+  assert.equal('error' in comparableDraft({ url: 'javascript:alert(1)', amount: '10', state: 'sold' }), true);
+  assert.equal('error' in comparableDraft({ url: 'vinted.com/abc', amount: '', state: 'sold' }), true);
+
+  assert.deepEqual(productNameInput('  Navy coat  '), { name: 'Navy coat' });
+  assert.equal('error' in productNameInput('   '), true);
+  assert.equal('error' in productNameInput('n'.repeat(121)), true);
+
+  const page = readFileSync(new URL('../components/product-page.tsx', import.meta.url), 'utf8');
+  const details = page.slice(page.indexOf('function DetailsForm'), page.indexOf('function NameForm'));
+  const name = page.slice(page.indexOf('function NameForm'), page.indexOf('function ValueForm'));
+  const description = page.slice(page.indexOf('function DescriptionForm'), page.indexOf('function ActionForm'));
+
+  assert.equal(details.includes('label="Name"'), false);
+  assert.equal(details.includes('listing_title'), false);
+  assert.equal(name.includes('label="Name"'), true);
+  assert.equal(name.includes('listing_title'), false);
+  assert.equal(name.includes('name: parsed.name'), true);
+  assert.equal(description.includes('listing_title'), true);
+  assert.equal(page.includes('ListingsOverview'), false);
+  assert.equal(page.includes('Add similar listing'), true);
+  assert.equal(page.includes('Edit name'), true);
+  assert.equal(page.includes("setSheet('listing')"), true);
+  assert.equal(page.includes('updateSellComparable'), true);
+  assert.equal(page.includes('Remove this listing?'), true);
+  assert.equal(page.includes("navigation.resumeCreation('sell', record.id)"), true);
 });
 
 test('creation still owns setup', () => {

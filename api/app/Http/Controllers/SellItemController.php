@@ -270,13 +270,20 @@ class SellItemController extends Controller
     public function storeComparable(Request $request, SellItemFlow $flow, SellItem $item): SellItemResource
     {
         $this->authorize('update', $item);
-        $input = $request->validate([
-            'url' => ['required', 'string', 'max:500'],
-            'amount_minor' => ['required', 'integer', 'min:0'],
-            'state' => ['required', Rule::in(['sold', 'asking', 'unknown'])],
-            'note' => ['nullable', 'string', 'max:200'],
-        ]);
-        $flow->addComparable($item, $input);
+        $flow->addComparable($item, $this->comparableInput($request));
+
+        return new SellItemResource($this->load($item));
+    }
+
+    public function updateComparable(Request $request, SellItemFlow $flow, SellItem $item, SellComparable $comparable): SellItemResource
+    {
+        $this->authorize('update', $item);
+
+        if ($comparable->sell_item_id !== $item->id) {
+            abort(404);
+        }
+
+        $flow->updateComparable($item, $comparable, $this->comparableInput($request));
 
         return new SellItemResource($this->load($item));
     }
@@ -292,6 +299,19 @@ class SellItemController extends Controller
         $comparable->delete();
 
         return response()->noContent();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function comparableInput(Request $request): array
+    {
+        return $request->validate([
+            'url' => ['required', 'string', 'max:500'],
+            'amount_minor' => ['required', 'integer', 'min:0'],
+            'state' => ['required', Rule::in(['sold', 'asking', 'unknown'])],
+            'note' => ['nullable', 'string', 'max:200'],
+        ]);
     }
 
     private function collageZoom(mixed $value): float

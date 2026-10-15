@@ -13,6 +13,7 @@ import { ScoreHero } from '@/components/score-hero';
 import { sellIcon } from '@/components/sell-flow';
 import { ErrorState, LinkButton, LoadingState, T } from '@/components/ui';
 import { categoryIcon, showsOnSellBoard } from '@/lib/sell-cache';
+import { resumeSellSetup, sellCardCue, sellEntry } from '@/lib/sell';
 import { useLayout } from '@/design/layout';
 import { font, space, weight } from '@/design/tokens';
 import { useTheme } from '@/state/theme';
@@ -100,7 +101,11 @@ export default function SellScreen() {
               empty={open.length > 0 ? (
                 <ProductGrid columns={productColumns(layout)}>
                   {open.map((mission) => (
-                    <LegacyCard key={mission.id} mission={mission} onPress={() => navigation.openMission(mission.id, { sellItemId: mission.sell_item_id })} />
+                    <LegacyCard key={mission.id} mission={mission} onPress={() => {
+                      if (!resumeSellSetup(mission.sell_item_id, mission.setup_done)) {
+                        navigation.openMission(mission.id, { sellItemId: mission.sell_item_id });
+                      }
+                    }} />
                   ))}
                 </ProductGrid>
               ) : listLoading ? null : (
@@ -205,8 +210,15 @@ function SellBoard({ empty }: { empty: ReactNode }) {
           key={item.id}
           item={item}
           icon={categoryIcon(catalog.data?.data.categories, item.category)}
+          cue={sellCardCue(item.setup_done)}
           onPress={() => {
-            navRequest('product.open.request', { id: item.id, from: 'sell', setupDone: item.setup_done });
+            if (sellEntry(item.setup_done) === 'creation') {
+              navRequest('product.resume.request', { id: item.id, from: 'sell', step: item.setup_step });
+              navigation.resumeCreation('sell', item.id);
+              return;
+            }
+
+            navRequest('product.open.request', { id: item.id, from: 'sell', setupDone: true });
             navigation.openProduct(item.id, 'sell');
           }}
         />
@@ -215,11 +227,12 @@ function SellBoard({ empty }: { empty: ReactNode }) {
   );
 }
 
-function ItemCard({ item, icon, onPress }: { item: SellItemView; icon: string; onPress: () => void }) {
+function ItemCard({ item, icon, cue, onPress }: { item: SellItemView; icon: string; cue: string | null; onPress: () => void }) {
   return (
     <ProductCard
       title={item.name?.trim() || 'Untitled item'}
       step={itemStep(item)}
+      cue={cue}
       money={itemMoney(item)}
       photoUrl={item.cover_url}
       icon={icon}
@@ -244,6 +257,7 @@ function LegacyCard({ mission, onPress }: { mission: Opportunity; onPress: () =>
 function ProductCard({
   title,
   step,
+  cue,
   money,
   photoUrl,
   icon,
@@ -251,17 +265,19 @@ function ProductCard({
 }: {
   title: string;
   step: string;
+  cue?: string | null;
   money: string | null;
   photoUrl: string | null;
   icon: string;
   onPress: () => void;
 }) {
   const { color } = useTheme();
+  const label = cue ? `${title}, ${cue}, ${money ?? 'not valued'}, ${step}` : `${title}, ${money ?? 'not valued'}, ${step}`;
 
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${title}, ${money ?? 'not valued'}, ${step}`}
+      accessibilityLabel={label}
       onPress={onPress}
       style={({ pressed }) => ({ width: '100%', opacity: pressed ? 0.72 : 1 })}
     >
@@ -274,6 +290,11 @@ function ProductCard({
               <Icon name={sellIcon(icon)} size={64} color={color.ink} weight="duotone" />
             </View>
           )}
+          {cue ? (
+            <View pointerEvents="none" style={styles.cue}>
+              <Text style={styles.cueText}>{cue}</Text>
+            </View>
+          ) : null}
         </View>
         <View style={[styles.info, { borderTopColor: color.line }]}>
           <Text numberOfLines={2} style={[styles.title, { color: color.ink }]}>{title}</Text>
@@ -290,6 +311,8 @@ function ProductCard({
 const styles = StyleSheet.create({
   card: { width: '100%', borderRadius: 22, borderWidth: 1, overflow: 'hidden' },
   photo: { width: '100%', aspectRatio: 1, overflow: 'hidden' },
+  cue: { position: 'absolute', left: 8, bottom: 8, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999, backgroundColor: 'rgba(0,0,0,0.62)' },
+  cueText: { color: '#FFFFFF', fontFamily: font.semi, fontWeight: weight.semibold, fontSize: 12, lineHeight: 16 },
   fallback: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   info: { paddingHorizontal: 12, paddingTop: 10, paddingBottom: 8, gap: 2, borderTopWidth: StyleSheet.hairlineWidth, minHeight: 62 },
   footer: { paddingHorizontal: 12, paddingVertical: 10, borderTopWidth: StyleSheet.hairlineWidth },

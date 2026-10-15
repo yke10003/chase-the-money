@@ -389,6 +389,14 @@ export function addSellComparable(
   return apiRequest(`/v1/sell/items/${id}/comparables`, { method: 'POST', body: input });
 }
 
+export function updateSellComparable(
+  id: number,
+  comparableId: number,
+  input: { url: string; amount_minor: number; state: 'sold' | 'asking' | 'unknown'; note?: string | null },
+): Promise<{ data: SellItemView }> {
+  return apiRequest(`/v1/sell/items/${id}/comparables/${comparableId}`, { method: 'PATCH', body: input });
+}
+
 export function deleteSellComparable(id: number, comparableId: number): Promise<void> {
   return apiRequest(`/v1/sell/items/${id}/comparables/${comparableId}`, { method: 'DELETE' });
 }

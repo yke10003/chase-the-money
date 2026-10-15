@@ -65,7 +65,7 @@ On boot, `GET /api/v1/me` decides the session.
 | `/freelance/new`, `/recover/new`, `/build/new` | Cockpit-specific create screens. No category picker. |
 | `/opportunities` | All activity. Not in the navigation. `?start=cost` reviews one expense |
 | `/opportunities/new` | Custom mission, plus cut-a-cost. `?mode=` redirects to the cockpit create route |
-| `/product/[id]` | Product Detail for a Sell item, by the item's own id. Missions that are Sell items open here, using `sell_item_id` |
+| `/product/[id]` | Product Detail for a finished Sell item, by the item's own id. An unfinished item resumes `/create/sell/setup/[id]` instead |
 | `/opportunities/[id]` | Detail for other missions. A Sell mission redirects to its product. Back goes to the cockpit that owns it |
 | `/discover` | Redirects into the cockpit that now owns that tool |
 | `/progress` | Progress. Links to All activity |

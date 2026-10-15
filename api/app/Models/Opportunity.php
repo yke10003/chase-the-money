@@ -115,6 +115,16 @@ class Opportunity extends Model
         return $item->id;
     }
 
+    /** False while setup is unfinished. Null when this mission has no Sell item. */
+    public function sellSetupDone(): ?bool
+    {
+        if ($this->sellItemId() === null) {
+            return null;
+        }
+
+        return $this->sellItem?->setupDone();
+    }
+
     /**
      * @return array<string, string>
      */

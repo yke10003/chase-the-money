@@ -55,11 +55,15 @@ All items in this section are **[Decision]**.
 
 ### 2.2 Detail pages
 
-- Product Detail (`/product/[id]`) is the canonical full-screen detail for Sell products.
-- Home actions that target a Sell product open Product Detail.
+- Product Detail (`/product/[id]`) is the canonical full-screen detail for Sell products whose setup is finished.
+- Setup is finished only when `setup_done` is true (`setup_step === 'done'`). Photos, a price, a description, and whether the item is listed do not decide it. A finished product that is not listed yet still opens Product Detail.
+- Tapping an unfinished Sell product resumes root-owned Sell creation at the saved `setup_step` (`navigation.resumeCreation`). It does not open Product Detail first. The origin is the tab or open experience that started the resume, same as any other creation session.
+- Home does not list drafts. All activity, an old mission link, and any other entry that already knows `setup_done` is false use the same resume. Product Detail's Continue Setup stays for an unfinished product that was opened directly.
+- Home actions that target a finished Sell product open Product Detail.
 - Generic mission detail (`/opportunities/[id]`) stays the detail for other mission types.
 - The legacy Sell detail (`/sell/items/[id]`) is retired through safe redirects. Deep links to it keep working.
 - Opening a mission from Home does not switch tabs.
+- **Device-accepted 2026-10-15** (iPhone 16 Pro). Journeys A–G passed: an unfinished Sell card resumes the saved step and returns to Sell; a finished unlisted product opens Product Detail; an unfinished item opened from All activity (Progress, from Home) resumes and returns to Home; similar listings add, edit, discard, and delete on Product Detail; `vinted.com/abc` is accepted; the name editor updates the title and the Sell card and leaves the listing title unchanged; creation, Research, Photos, Edit Photo, Save & exit, Finish, Profile, Progress, the cockpit and the tab bar showed no regression.
 
 ### 2.3 Returning after creation
 
@@ -237,12 +241,12 @@ In `setModalViewControllers`, if the previous modal `isBeingDismissed`, the fini
 
 `app/src/app/(app)/product/[id]/index.tsx`, `app/src/components/product-page.tsx` **[Code]**
 
-- Opened from the Sell board (`router.push('/product/:id')`). The id is the Sell item id.
-- `close()` is `router.canGoBack() ? router.back() : router.dismissTo('/sell')`. The fallback reuses the `(tabs)` underneath instead of replacing the detail route with a new one.
-- Continue Setup is `navigation.resumeCreation('sell', id)` (T1).
-- Short editors (details, value, description, action, outcome, listings) use one React Native `<Modal presentationStyle="pageSheet">`, driven by local `sheet` state. "Add similar listing" swaps content inside the same modal (`adding` flag).
+- A finished Sell product opens here. The id is the Sell item id. The Sell board calls `navigation.openProduct`. An unfinished card calls `navigation.resumeCreation` instead, and shows a "Continue setup" cue. Home, area lists and All activity do the same when `setup_done` is false. Device-accepted 2026-10-15 (section 2.2).
+- `close()` is `navigation.closeExperience()`.
+- Continue Setup stays on Product Detail for an unfinished product that was opened directly. It is `navigation.resumeCreation('sell', id)` (T1).
+- Short editors (name, details, value, description, action, outcome, one similar listing) use one React Native `<Modal presentationStyle="pageSheet">`, driven by local `sheet` state. The product name is its own sheet. Details does not edit the name, and neither sheet writes `listing_title`. Similar listings are listed on the page: Add and Edit open the form directly, and delete asks first. There is no second overview page. The guided Research step in creation is unchanged.
 - Saves go through `rememberSellItem` and do not navigate.
-- There is no unsaved-changes guard.
+- A dirty editor asks before Close or a swipe discards it. A failed save leaves the sheet open. A clean sheet dismisses.
 
 **Sell creation** (Stage 3) **[Code]**
 
@@ -257,7 +261,7 @@ In `setModalViewControllers`, if the previous modal `isBeingDismissed`, the fini
 - When `item.setup_done` is true and the user is not finishing, setup calls `navigation.closeExperience()` and shows "This item is already set up" with an X in case that close is ignored.
 - The photo picker uses `UIImagePickerPresentationStyle.OVER_FULL_SCREEN`. A full-screen camera presented by creation had dismissed creation and the cockpit when it closed.
 - Already Listed finishes with `navigation.finishCreation('Listing added')`. No detail page opens (2.6).
-- Entry points: Sell "Sell something" and "Already listed" (`startCreation`), Money Hunt (`resumeCreation` with the new id), Product Detail and the legacy item page "Continue setup" (`resumeCreation`), and `/opportunities/new?mode=sell` (`startCreation`, which closes the secondary modal first).
+- Entry points: Sell "Sell something" and "Already listed" (`startCreation`), an unfinished Sell card (`resumeCreation`), Money Hunt (`resumeCreation` with the new id), Product Detail "Continue setup" (`resumeCreation`), All activity and Home when `setup_done` is false (`resumeCreation`), and `/opportunities/new?mode=sell` (`startCreation`, which closes the secondary modal first).
 
 **Sell AreaStack** **[Code]**
 
@@ -394,7 +398,7 @@ Predicted failure modes (experiment E9 confirms which one happens):
 
 - A Sell item opened in three places: `/product/:id` (board), the legacy `/sell/items/:id` (Already Listed), and `/opportunities/:id` (Home, legacy cards).
 - `Opportunity` and `SuggestedAction` in `app/src/api/types.ts` did not expose the Sell item id. Only `SellItemView.opportunity_id` existed.
-- **Stage 4** (done, device-accepted 2026-10-14): the API exposes a nullable `sell_item_id`, and every Sell entry point goes through `navigation.openProduct` or `navigation.openMission` to `/product/:sellItemId`. See the Stage 4 section.
+- **Stage 4** (done, device-accepted 2026-10-14): the API exposes a nullable `sell_item_id`, and Sell entry points go through `navigation.openProduct` or `navigation.openMission` to `/product/:sellItemId`. See the Stage 4 section. An unfinished product (`setup_done` false) now resumes creation instead. See section 2.2.
 - "Close" is implemented as `back()`, `dismissTo('/sell')`, `replace('/sell')`, `push(backHref)`, `push(areaHref)` and `push('/')`.
 - "Finish" is `dismissTo('/sell')` for Sell and `replace(doneHref)` elsewhere.
 - Resume is a module global plus an effect.

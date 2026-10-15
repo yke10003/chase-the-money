@@ -38,6 +38,7 @@ class OpportunityResource extends JsonResource
             'created_at' => $this->created_at?->toISOString(),
             'updated_at' => $this->updated_at?->toISOString(),
             'sell_item_id' => $this->resource->sellItemId(),
+            'setup_done' => $this->resource->sellSetupDone(),
             'next_action' => $this->nextActionResource(),
         ];
     }

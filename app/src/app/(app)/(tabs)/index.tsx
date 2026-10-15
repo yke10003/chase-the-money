@@ -18,6 +18,7 @@ import { goalPeriodName } from '@/lib/goal';
 import { formatAmount, formatAmountRange } from '@/lib/money';
 import { describeProgress, missionGroup, type Attention } from '@/lib/mission';
 import { navigation } from '@/lib/navigation';
+import { resumeSellSetup } from '@/lib/sell';
 import { useTheme } from '@/state/theme';
 
 function useHomeStyles() {
@@ -249,7 +250,11 @@ function FeaturedAction({ action, missions }: { action: SuggestedAction; mission
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={`${action.title}, ${action.opportunity_title}`}
-      onPress={() => navigation.openMission(action.opportunity_id, { sellItemId: action.sell_item_id })}
+      onPress={() => {
+        if (!resumeSellSetup(action.sell_item_id, action.setup_done)) {
+          navigation.openMission(action.opportunity_id, { sellItemId: action.sell_item_id });
+        }
+      }}
       style={(state) => [{
         gap: 6,
         padding: space.lg,
@@ -283,7 +288,11 @@ function ActionLine({ action }: { action: SuggestedAction }) {
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={`${action.title}, ${action.opportunity_title}`}
-      onPress={() => navigation.openMission(action.opportunity_id, { sellItemId: action.sell_item_id })}
+      onPress={() => {
+        if (!resumeSellSetup(action.sell_item_id, action.setup_done)) {
+          navigation.openMission(action.opportunity_id, { sellItemId: action.sell_item_id });
+        }
+      }}
       style={(state) => ({
         flexDirection: 'row',
         alignItems: 'center',
@@ -404,7 +413,11 @@ function WaitingSection({ missions }: { missions: Opportunity[] }) {
           <Pressable
             key={mission.id}
             accessibilityRole="button"
-            onPress={() => navigation.openMission(mission.id, { sellItemId: mission.sell_item_id })}
+            onPress={() => {
+              if (!resumeSellSetup(mission.sell_item_id, mission.setup_done)) {
+                navigation.openMission(mission.id, { sellItemId: mission.sell_item_id });
+              }
+            }}
             style={{ flexDirection: 'row', gap: space.md, alignItems: 'baseline', paddingTop: index === 0 ? 4 : 10 }}
           >
             <View style={{ width: 52 }}>

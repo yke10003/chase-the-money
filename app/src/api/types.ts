@@ -74,6 +74,8 @@ export type Opportunity = {
   updated_at: string | null;
   /** The Sell product to open (/product/[id]) when this mission is a Sell item. Not the mission's own id. */
   sell_item_id: number | null;
+  /** False while that product's setup is unfinished. Null when there is no Sell item. */
+  setup_done: boolean | null;
   next_action: OpportunityAction | null;
 };
 
@@ -160,6 +162,7 @@ export type SuggestedAction = OpportunityAction & {
   opportunity_type: OpportunityType;
   expected_on: string | null;
   sell_item_id: number | null;
+  setup_done: boolean | null;
   why: string | null;
 };
 

@@ -56,6 +56,7 @@ class OpportunitySellItemIdTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.id', $opportunity->id)
             ->assertJsonPath('data.sell_item_id', $item->id)
+            ->assertJsonPath('data.setup_done', true)
             ->assertJsonPath('data.title', 'Versace jacket')
             ->assertJsonPath('data.stage', 'valuing');
 
@@ -153,8 +154,10 @@ class OpportunitySellItemIdTest extends TestCase
         $this->assertSame('Take photos', $sellAction['title']);
         $this->assertSame('sell', $sellAction['opportunity_type']);
         $this->assertSame($item->id, $sellAction['sell_item_id']);
+        $this->assertTrue($sellAction['setup_done']);
         $this->assertNotSame($sellAction['opportunity_id'], $sellAction['sell_item_id']);
         $this->assertNull($recoverAction['sell_item_id']);
+        $this->assertNull($recoverAction['setup_done']);
 
         $moving = collect($data['money_in_motion']);
 
@@ -212,6 +215,20 @@ class OpportunitySellItemIdTest extends TestCase
         $this->actingAs($user)->postJson('/api/v1/opportunities/'.$opportunity->id.'/pause')->assertOk();
 
         $this->assertSame(0, $this->itemQueries());
+    }
+
+    #[Test]
+    public function an_unfinished_item_is_marked_on_the_mission(): void
+    {
+        $user = User::factory()->create();
+        [$opportunity, $item] = $this->sellMission($user);
+        $item->setup_step = 'photos';
+        $item->save();
+
+        $this->actingAs($user)->getJson('/api/v1/opportunities/'.$opportunity->id)
+            ->assertOk()
+            ->assertJsonPath('data.sell_item_id', $item->id)
+            ->assertJsonPath('data.setup_done', false);
     }
 
     private function itemQueries(): int
