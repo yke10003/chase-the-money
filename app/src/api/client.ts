@@ -206,6 +206,12 @@ type NativeUpload = {
 };
 
 export async function apiUploadFile<T>(path: string, fileUri: string, options: NativeUpload): Promise<T> {
+  // The Expo File class calls validatePath() in its constructor. The web build of
+  // expo-file-system does not implement that method, so a library photo never uploads.
+  if (Platform.OS === 'web') {
+    return uploadBrowserFile(path, fileUri, options);
+  }
+
   const { File, UploadType } = await import('expo-file-system');
   const file = new File(fileUri);
   const result = await file.upload(`${apiUrl()}/api${path}`, {
@@ -232,6 +238,33 @@ export async function apiUploadFile<T>(path: string, fileUri: string, options: N
   }
 
   return rewriteDevUrls(payload) as T;
+}
+
+async function uploadBrowserFile<T>(path: string, fileUri: string, options: NativeUpload): Promise<T> {
+  const response = await fetch(fileUri);
+
+  if (!response.ok) {
+    throw new Error('Could not read the photo.');
+  }
+
+  const blob = await response.blob();
+  const type = blob.type || options.mimeType;
+  const named = new globalThis.File([blob], uploadFileName(type), { type });
+  const body = new FormData();
+  body.append(options.fieldName, named);
+
+  for (const [key, value] of Object.entries(options.parameters ?? {})) {
+    body.append(key, value);
+  }
+
+  return apiUpload(path, body);
+}
+
+function uploadFileName(mimeType: string): string {
+  const subtype = mimeType.split('/')[1]?.split('+')[0] ?? 'bin';
+  const extension = subtype === 'jpeg' ? 'jpg' : subtype;
+
+  return `upload.${extension}`;
 }
 
 /** PHP prints a warning in front of the JSON when a POST exceeds post_max_size. */

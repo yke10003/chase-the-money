@@ -15,8 +15,10 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class SellItemController extends Controller
 {
@@ -172,6 +174,23 @@ class SellItemController extends Controller
         }
 
         return new SellItemResource($this->load($item));
+    }
+
+    public function downloadPhoto(SellItem $item, SellItemPhoto $photo): StreamedResponse
+    {
+        $this->authorize('view', $item);
+        $this->ownedPhoto($item, $photo);
+
+        $path = $photo->edited_path ?: $photo->path;
+        $extension = pathinfo($path, PATHINFO_EXTENSION) ?: 'jpg';
+
+        Log::info('sell.photo.download', [
+            'user_id' => $item->user_id,
+            'sell_item_id' => $item->id,
+            'photo_id' => $photo->id,
+        ]);
+
+        return Storage::disk($photo->disk)->download($path, 'picture.'.$extension);
     }
 
     public function cover(SellItem $item, SellItemPhoto $photo): SellItemResource

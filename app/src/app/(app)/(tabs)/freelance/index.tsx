@@ -67,11 +67,16 @@ export default function FreelanceScreen() {
   const currency = open[0]?.currency ?? goal.data?.currency ?? 'EUR';
   const earned = progress.data?.data.realized_earn_minor ?? 0;
   const proposedLabel = proposed > 0 ? formatAmount(proposed, currency) : null;
+  const actions = [
+    { label: 'Add a lead', icon: 'plus' as const, onPress: () => navigation.startCreation('freelance') },
+    { label: 'Message someone', icon: 'chat' as const, onPress: () => setSheet('message') },
+  ];
 
   return (
     <>
       <CockpitFrame
         title="Freelance"
+        actions={actions}
         moves={
           <ScoreHero
             wash="earn"
@@ -85,10 +90,7 @@ export default function FreelanceScreen() {
             ]}
             series={progress.data?.data.series}
             note={week.data && week.data.data.xp > 0 ? `+${week.data.data.xp} XP this week` : null}
-            actions={[
-              { label: 'Add a lead', icon: 'plus', onPress: () => navigation.startCreation('freelance') },
-              { label: 'Message someone', icon: 'chat', onPress: () => setSheet('message') },
-            ]}
+            actions={actions}
           />
         }
         below={

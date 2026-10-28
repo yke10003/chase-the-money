@@ -1,5 +1,3 @@
-import { Host, Button as SwiftButton, Image as SwiftImage, Menu } from '@expo/ui/swift-ui';
-import { accessibilityLabel, buttonBorderShape, buttonStyle, controlSize, disabled as swiftDisabled, frame } from '@expo/ui/swift-ui/modifiers';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
@@ -12,8 +10,9 @@ import { BackgroundSwatches } from '@/components/background-swatches';
 import { CockpitPage, useCockpit } from '@/components/cockpit-context';
 import { EditingSheet } from '@/components/editing-sheet';
 import { GlassSaveButton } from '@/components/glass-close';
+import { HistoryMenu, ToolButton } from '@/components/photo-edit-tools';
 import { PhotoCrop } from '@/components/photo-crop';
-import { Button, InlineError, LoadingState, T } from '@/components/ui';
+import { InlineError, LoadingState, T } from '@/components/ui';
 import { font, space, weight } from '@/design/tokens';
 import { confirmDiscard } from '@/lib/confirm';
 import { errorMessage } from '@/lib/errors';
@@ -288,84 +287,5 @@ export default function EditPhotoScreen() {
         ) : null}
       </Modal>
     </CockpitPage>
-  );
-}
-
-function HistoryMenu({
-  canUndo: undoable,
-  canRedo: redoable,
-  canReset: resettable,
-  onUndo,
-  onRedo,
-  onReset,
-}: {
-  canUndo: boolean;
-  canRedo: boolean;
-  canReset: boolean;
-  onUndo: () => void;
-  onRedo: () => void;
-  onReset: () => void;
-}) {
-  const { color } = useTheme();
-
-  if (Platform.OS !== 'ios') {
-    return (
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Edit history"
-        onPress={() => {
-          const actions: Array<{ text: string; onPress: () => void; style?: 'cancel' | 'destructive' }> = [];
-          if (undoable) {
-            actions.push({ text: 'Undo', onPress: onUndo });
-          }
-          if (redoable) {
-            actions.push({ text: 'Redo', onPress: onRedo });
-          }
-          if (resettable) {
-            actions.push({ text: 'Reset to original', onPress: onReset });
-          }
-          actions.push({ text: 'Cancel', style: 'cancel', onPress: () => undefined });
-          Alert.alert(actions.length === 1 ? 'Nothing to undo' : 'Edit photo', undefined, actions);
-        }}
-        style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
-      >
-        <Text style={{ color: color.ink, fontSize: 20 }}>•••</Text>
-      </Pressable>
-    );
-  }
-
-  return (
-    <Host matchContents>
-      <Menu
-        label={(
-          <SwiftButton modifiers={[buttonStyle('glass'), buttonBorderShape('circle'), controlSize('large'), frame({ minWidth: 44, minHeight: 44 }), accessibilityLabel('Edit history')]}>
-            <SwiftImage systemName="ellipsis" size={15} color={color.ink} />
-          </SwiftButton>
-        )}
-      >
-        <SwiftButton label="Undo" systemImage="arrow.uturn.backward" onPress={onUndo} modifiers={[swiftDisabled(!undoable)]} />
-        <SwiftButton label="Redo" systemImage="arrow.uturn.forward" onPress={onRedo} modifiers={[swiftDisabled(!redoable)]} />
-        <SwiftButton label="Reset to original" systemImage="arrow.counterclockwise" onPress={onReset} modifiers={[swiftDisabled(!resettable)]} />
-      </Menu>
-    </Host>
-  );
-}
-
-function ToolButton({ label, systemImage, disabled, onPress }: { label: string; systemImage: 'crop' | typeof REMOVE_BACKGROUND; disabled?: boolean; onPress: () => void }) {
-  const { color } = useTheme();
-
-  if (Platform.OS !== 'ios') {
-    return <Button label={label} tone="secondary" disabled={disabled} onPress={onPress} />;
-  }
-
-  return (
-    <Host matchContents>
-      <SwiftButton
-        onPress={onPress}
-        modifiers={[buttonStyle('glass'), buttonBorderShape('circle'), controlSize('large'), frame({ minWidth: 44, minHeight: 44 }), accessibilityLabel(label), swiftDisabled(Boolean(disabled))]}
-      >
-        <SwiftImage systemName={systemImage} size={16} color={color.ink} />
-      </SwiftButton>
-    </Host>
   );
 }

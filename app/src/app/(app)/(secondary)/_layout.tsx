@@ -18,6 +18,8 @@ type FrameNavigation = {
 
 /**
  * Profile, Progress, All activity, custom missions and mission detail.
+ * The listing lab and in-app bloom preview are pushes here too: a root card
+ * would leave the cockpit sheet presented (navigation.md).
  *
  * On iOS phone this whole group is one fullScreenModal over the cockpit (see
  * the (app) layout). Pages opened from here are pushes inside it, so Back stays
@@ -26,6 +28,10 @@ type FrameNavigation = {
  *
  * Everywhere else AppShell draws the page and this is a plain slot.
  */
+
+// Document pages share SecondaryFrame. These two fill the modal and draw their own page.
+const OWN_PAGE = new Set(['listing-lab', 'bloom']);
+
 export default function SecondaryLayout() {
   const phone = useLayout().phone;
   const { color } = useTheme();
@@ -39,11 +45,15 @@ export default function SecondaryLayout() {
     <FeedbackProvider>
       <Stack
         screenOptions={{ headerShown: false, animation: 'slide_from_right', contentStyle: { backgroundColor: color.paper } }}
-        screenLayout={({ children, navigation, route }) => (
-          <SecondaryFrame navigation={navigation as FrameNavigation} routeKey={route.key} routeName={route.name}>
-            {children}
-          </SecondaryFrame>
-        )}
+        screenLayout={({ children, navigation, route }) =>
+          OWN_PAGE.has(route.name) ? (
+            <View style={{ flex: 1 }}>{children}</View>
+          ) : (
+            <SecondaryFrame navigation={navigation as FrameNavigation} routeKey={route.key} routeName={route.name}>
+              {children}
+            </SecondaryFrame>
+          )
+        }
       />
     </FeedbackProvider>
   );

@@ -1,11 +1,10 @@
-import { Host, Image as SwiftImage, Button as SwiftButton } from '@expo/ui/swift-ui';
-import { buttonBorderShape, buttonStyle, controlSize, disabled as swiftDisabled, frame } from '@expo/ui/swift-ui/modifiers';
 import { createElement, type DragEvent, type ReactNode } from 'react';
 import { Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { GlassClose, GlassIconButton } from '@/components/glass-close';
 import { Icon, type IconName } from '@/components/icon';
-import { Button } from '@/components/ui';
+import { ProminentButton } from '@/components/prominent-button';
 import { useLayout } from '@/design/layout';
 import { font, space, weight } from '@/design/tokens';
 import { JOURNEY, journeyIndex } from '@/lib/sell';
@@ -62,18 +61,8 @@ export function SellJourney({
     <View style={{ gap: space.md }}>
       {creation ? (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <Host matchContents>
-            <SwiftButton onPress={onExit} modifiers={[buttonStyle('glass'), buttonBorderShape('circle'), controlSize('large'), frame({ minWidth: 44, minHeight: 44 })]}>
-              <SwiftImage systemName="xmark" size={15} color={color.ink} />
-            </SwiftButton>
-          </Host>
-          {onBack ? (
-            <Host matchContents>
-              <SwiftButton onPress={onBack} modifiers={[buttonStyle('glass'), buttonBorderShape('circle'), controlSize('large'), frame({ minWidth: 44, minHeight: 44 })]}>
-                <SwiftImage systemName="chevron.backward" size={15} color={color.ink} />
-              </SwiftButton>
-            </Host>
-          ) : null}
+          <GlassClose onPress={onExit} />
+          {onBack ? <GlassIconButton systemName="chevron.backward" icon="arrowLeft" label="Back" onPress={onBack} /> : null}
           <View style={{ flex: 1 }} />
           {footer}
         </View>
@@ -210,21 +199,5 @@ export function JourneyContinue({
   busy?: boolean;
   disabled?: boolean;
 }) {
-  const phone = useLayout().phone;
-  const creation = phone && Platform.OS === 'ios';
-  const inactive = disabled || busy;
-
-  if (creation) {
-    return (
-      <Host matchContents>
-        <SwiftButton
-          label={label}
-          onPress={onPress}
-          modifiers={[buttonStyle('borderedProminent'), buttonBorderShape('capsule'), swiftDisabled(inactive)]}
-        />
-      </Host>
-    );
-  }
-
-  return <Button label={label} onPress={onPress} busy={busy} disabled={disabled} size="lg" iconRight="arrowRight" />;
+  return <ProminentButton label={label} onPress={onPress} busy={busy} disabled={disabled} />;
 }

@@ -201,4 +201,4 @@ export const breakpoint = {
   wide: 1240,
 } as const;
 
-export const contentMaxWidth = 1360;
+export const contentMaxWidth = 1280;

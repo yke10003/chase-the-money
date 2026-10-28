@@ -21,6 +21,21 @@ import { Button, Field, InlineError, MoneyField, T } from '@/components/ui';
 import { font, space, weight } from '@/design/tokens';
 import { confirmAction } from '@/lib/confirm';
 import { errorMessage } from '@/lib/errors';
+import { cancelListingGeneration, generateListing, getListingAvailability, listingErrorCode } from '@/lib/listing-generation';
+import { listingFacts, listingLabPhotos, prepareListingPhotos } from '@/lib/listing-lab';
+import {
+  applyStyleResult,
+  conditionOmission,
+  LISTING_STYLES,
+  outputLanguage,
+  pressStyle,
+  resolveOverwrite,
+  styleBlockedReason,
+  styleLabel,
+  stylePhotoCount,
+  styleRequest,
+  type ListingStyle,
+} from '@/lib/listing-styles';
 import { formatAmount, minorToMajorInput } from '@/lib/money';
 import { navigation } from '@/lib/navigation';
 import { comparableDraft } from '@/lib/product-detail';
@@ -56,6 +71,18 @@ export default function SellSetupScreen() {
   const [unknown, setUnknown] = useState(false);
   const [listingTitle, setListingTitle] = useState('');
   const [listingDescription, setListingDescription] = useState('');
+  const [generating, setGenerating] = useState<ListingStyle | null>(null);
+  const [styleError, setStyleError] = useState<string | null>(null);
+  const [conditionWarning, setConditionWarning] = useState<string | null>(null);
+  const generationRef = useRef<{ id: number; baseline: string } | null>(null);
+  const generationSerial = useRef(0);
+  const descriptionRef = useRef(listingDescription);
+  descriptionRef.current = listingDescription;
+  const availabilityQuery = useQuery({
+    queryKey: ['listing-generation', 'availability'],
+    queryFn: getListingAvailability,
+    enabled: __DEV__,
+  });
   const [link, setLink] = useState('');
   const [price, setPrice] = useState('');
   const [saleState, setSaleState] = useState<'sold' | 'asking'>('sold');
@@ -72,6 +99,19 @@ export default function SellSetupScreen() {
   activeShot.current = shot;
 
   const coverUrl = item?.cover_url ?? null;
+
+  useEffect(() => {
+    if (step === 'description') {
+      return () => {
+        generationRef.current = null;
+        cancelListingGeneration();
+      };
+    }
+
+    generationRef.current = null;
+    cancelListingGeneration();
+    setGenerating(null);
+  }, [step]);
 
   useEffect(() => {
     if (!coverUrl) {
@@ -278,6 +318,10 @@ export default function SellSetupScreen() {
   }
 
   async function saveDescription(finish: boolean) {
+    if (generationRef.current) {
+      return false;
+    }
+
     const title = listingTitle.trim();
     const description = listingDescription.trim();
     let savedOk = false;
@@ -516,6 +560,9 @@ export default function SellSetupScreen() {
     }
 
     if (step === 'description') {
+      generationRef.current = null;
+      cancelListingGeneration();
+      setGenerating(null);
       void saveDescription(false).then(leaveIfSaved);
       return;
     }
@@ -579,7 +626,7 @@ export default function SellSetupScreen() {
       return <JourneyContinue label={unknown ? 'Keep the value unknown' : 'Continue'} busy={busy} onPress={() => void saveEstimate(true)} />;
     }
 
-    return <JourneyContinue label="Finish" busy={busy} onPress={() => void saveDescription(true)} />;
+    return <JourneyContinue label="Finish" busy={busy} disabled={generating != null} onPress={() => void saveDescription(true)} />;
   }
 
   function identityFields() {
@@ -622,12 +669,143 @@ export default function SellSetupScreen() {
   }
 
   function descriptionFields() {
+    const blocked = availabilityQuery.isError
+      ? 'Apple Intelligence could not be checked.'
+      : styleBlockedReason(availabilityQuery.data);
+    const showPhotoNote = __DEV__ && !blocked && availabilityQuery.data?.state === 'ready' && !availabilityQuery.data.vision;
+    const confirmed = listingFacts(record, catalog.data?.data);
+    const selectedPhotos = listingLabPhotos(record).length;
+
     return (
       <View style={{ gap: space.md }}>
         <Field label="Listing title" value={listingTitle} onChangeText={setListingTitle} placeholder={record.name ?? 'Listing title'} />
         <Field label="Description" value={listingDescription} onChangeText={setListingDescription} lines={6} placeholder="Optional" />
+        {__DEV__ ? (
+          <View style={{ gap: space.sm }}>
+            <View style={{ flexDirection: 'row', gap: space.sm }}>
+              {LISTING_STYLES.map((style) => (
+                <View key={style} style={{ flex: 1 }}>
+                  <Button
+                    label={styleLabel(style)}
+                    size="sm"
+                    tone="secondary"
+                    busy={generating === style}
+                    disabled={blocked != null || (generating != null && generating !== style)}
+                    onPress={() => void chooseStyle(style)}
+                  />
+                </View>
+              ))}
+            </View>
+            {generating ? <Button label="Cancel" tone="ghost" size="sm" onPress={cancelStyle} /> : null}
+            {showPhotoNote ? <T variant="small" color={color.ink3}>This model has no vision. Styles use the product facts only.</T> : null}
+            {blocked ? <T variant="small" color={color.ink3}>{blocked}</T> : null}
+            <T variant="small" color={color.ink3}>{confirmed.length ? confirmed.map((fact) => `${fact.label}: ${fact.value}`).join(' · ') : 'No confirmed facts on this item.'}</T>
+            <T variant="small" color={color.ink3}>{Math.min(selectedPhotos, 3)} photos can be attached. The pictures stay on this phone.</T>
+            {conditionWarning ? <T variant="small" color={color.ink3}>{conditionWarning}</T> : null}
+            {styleError ? <InlineError message={styleError} /> : null}
+          </View>
+        ) : null}
       </View>
     );
+  }
+
+  function cancelStyle() {
+    generationRef.current = null;
+    cancelListingGeneration();
+    setGenerating(null);
+  }
+
+  async function chooseStyle(style: ListingStyle) {
+    const decision = pressStyle({ description: descriptionRef.current, running: generationRef.current != null }, style);
+
+    if (decision.kind === 'ignored') {
+      return;
+    }
+
+    if (decision.kind === 'confirm') {
+      const baseline = descriptionRef.current;
+      const confirmed = await confirmAction('Replace description?', 'Existing text will be overwritten.', {
+        cancel: 'Cancel',
+        confirm: 'Overwrite',
+      });
+      const next = resolveOverwrite({
+        confirmed,
+        style,
+        description: descriptionRef.current,
+        baseline,
+      });
+
+      if (next.kind !== 'start') {
+        return;
+      }
+
+      await runStyle(next.style, next.baseline);
+      return;
+    }
+
+    await runStyle(decision.style, decision.baseline);
+  }
+
+  async function runStyle(style: ListingStyle, baseline: string) {
+    if (generationRef.current || styleBlockedReason(availabilityQuery.data)) {
+      return;
+    }
+
+    const id = generationSerial.current + 1;
+    generationSerial.current = id;
+    generationRef.current = { id, baseline };
+    setGenerating(style);
+    setStyleError(null);
+    setConditionWarning(null);
+
+    try {
+      const availability = availabilityQuery.data;
+
+      if (!availability || availability.state !== 'ready') {
+        return;
+      }
+
+      const locale = Intl.DateTimeFormat().resolvedOptions().locale ?? 'en';
+      const language = outputLanguage(availability, locale);
+      const count = stylePhotoCount(availability);
+      const facts = listingFacts(record, catalog.data?.data);
+      const photoPaths = count === 0 ? [] : await prepareListingPhotos(listingLabPhotos(record), count);
+
+      if (generationRef.current?.id !== id) {
+        return;
+      }
+
+      const result = await generateListing(styleRequest({
+        style,
+        language,
+        facts,
+        photoPaths,
+      }));
+      const next = applyStyleResult({
+        activeId: generationRef.current?.id ?? null,
+        resultId: id,
+        description: descriptionRef.current,
+        baseline,
+        title: listingTitle,
+        generated: result.listingDescription,
+      });
+
+      if (next.applied) {
+        setListingDescription(next.description);
+        setConditionWarning(conditionOmission(facts, next.description));
+      }
+    } catch (caught) {
+      if (listingErrorCode(caught) === 'cancelled' || generationRef.current?.id !== id) {
+        return;
+      }
+
+      setStyleError(errorMessage(caught));
+    } finally {
+      if (generationRef.current?.id === id) {
+        generationRef.current = null;
+        setGenerating(null);
+      }
+    }
   }
 
   function detailFields() {

@@ -5,6 +5,7 @@ import { StyleSheet, View } from 'react-native';
 import { CockpitBody, CockpitProvider, type CockpitAction, type PublishedScore } from '@/components/cockpit-context';
 import { MenuSheet } from '@/components/menu-sheet';
 import { homePaint, ScoreHeroView } from '@/components/score-hero';
+import { useBoot } from '@/state/boot';
 import { useTheme } from '@/state/theme';
 import { cockpitArea, isCockpitRoot, shellPath, type CockpitArea } from '@/lib/cockpit-scene';
 import { navLog } from '@/lib/nav-log';
@@ -48,7 +49,8 @@ function backdropFor(area: CockpitArea, accent: ReturnType<typeof useTheme>['acc
  */
 export function CockpitShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const { color, accent } = useTheme();
+  const { accent } = useTheme();
+  const { cockpitRevealed } = useBoot();
   const actionsRef = useRef<CockpitAction[]>([]);
   const [published, setPublished] = useState<PublishedScore | null>(null);
   const [detent, setDetent] = useState(0);
@@ -83,6 +85,12 @@ export function CockpitShell({ children }: { children: ReactNode }) {
     navLog('cockpit.hero', { area, tabPath });
   }, [area, tabPath]);
 
+  useEffect(() => {
+    if (cockpitRevealed) {
+      navLog('cockpit.present');
+    }
+  }, [cockpitRevealed]);
+
   return (
     <CockpitProvider publish={publish} actionsRef={actionsRef} detent={detent}>
       <View style={{ flex: 1 }}>
@@ -108,9 +116,14 @@ export function CockpitShell({ children }: { children: ReactNode }) {
             />
           </View>
         ) : null}
-        <MenuSheet paper={color.paper} onDetent={setDetent}>
-          <CockpitBody />
-        </MenuSheet>
+        {cockpitRevealed ? (
+          // The sheet presents above the React root, and the tab-bar lift follows it.
+          // It stays unmounted until the native splash has left, so neither covers the lockup.
+          // The wash is a sibling in NativeTabWash, so this mount does not restart the shader.
+          <MenuSheet onDetent={setDetent}>
+            <CockpitBody />
+          </MenuSheet>
+        ) : null}
       </View>
     </CockpitProvider>
   );

@@ -53,7 +53,8 @@ export default function SettingsScreen() {
     <View style={{ gap: space.xl, maxWidth: 880 }}>
       <PageHeader title="Profile" subtitle="Skills, goal, and account." />
       <AppearancePicker value={preference} onChange={setPreference} />
-      {__DEV__ ? <LinkButton label="Bloom preview" onPress={() => router.push('/bloom-preview')} /> : null}
+      {__DEV__ ? <LinkButton label="Bloom preview" onPress={() => router.push('/bloom')} /> : null}
+      {__DEV__ ? <LinkButton label="Listing lab" onPress={() => router.push('/listing-lab')} /> : null}
       <Segmented
         value={tab}
         options={[

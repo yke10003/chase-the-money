@@ -5,7 +5,7 @@ import { join, relative } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import { appWrapper, secondaryPresentation } from './app-shell';
+import { appWrapper, openWithoutGoal, secondaryPresentation } from './app-shell';
 import { cockpitArea, shellPath } from './cockpit-scene';
 import { photosSheetGestureEnabled, photosStackGestures } from './photos-nav';
 import { appBackAction, appRouteKeys, createNavigator, planTransition, readSnapshot, type Step } from './navigation';
@@ -251,7 +251,7 @@ function appState(root: Nav): Nav {
 }
 
 test('the iOS phone wrapper never changes with the page, so the (app) stack is not remounted', () => {
-  const paths = ['/', '/sell', '/create/sell/new', '/create/sell/listed', '/create/sell/setup/4', '/sell/items/4', '/freelance', '/recover', '/build', '/product/17', '/settings', '/progress', '/friends', '/opportunities', '/opportunities/12', '/opportunities/new', '/discover'];
+  const paths = ['/', '/sell', '/create/sell/new', '/create/sell/listed', '/create/sell/setup/4', '/sell/items/4', '/freelance', '/recover', '/build', '/product/17', '/settings', '/progress', '/friends', '/opportunities', '/opportunities/12', '/opportunities/new', '/discover', '/listing-lab', '/bloom', '/bloom-preview'];
   const wrappers = new Set(paths.map((pathname) => appWrapper({ os: 'ios', phone: true, pathname })));
 
   assert.deepEqual([...wrappers], ['NativeTabWash']);
@@ -310,6 +310,15 @@ test('opening a secondary page from a tab adds one route above the existing tabs
   assert.equal(next.routes[0].key, 'tabs-1');
 });
 
+test('profile stays reachable before a goal exists, and so do the dev pages opened from it', () => {
+  for (const pathname of ['/onboarding', '/settings', '/listing-lab', '/bloom']) {
+    assert.equal(openWithoutGoal(pathname), true, pathname);
+  }
+
+  assert.equal(openWithoutGoal('/sell'), false);
+  assert.equal(openWithoutGoal('/bloom-preview'), false);
+});
+
 test('a page opened from inside the secondary group is pushed inside it, not as a second modal', () => {
   const root = liveRoot([secondary(['progress'])]);
   const { targetKey, action } = linkAction('/opportunities', 'PUSH', root);
@@ -318,6 +327,58 @@ test('a page opened from inside the secondary group is pushed inside it, not as 
   const inner = secondaryRouter.getStateForAction(appState(root).routes[1].state, action, options(secondaryRouteNames));
 
   assert.deepEqual(inner.routes.map((route: Route) => route.name), ['progress', 'opportunities/index']);
+});
+
+test('listing lab and the in-app bloom preview are pushes inside the open secondary modal', () => {
+  const rootNames = (tree.children as { route: string }[]).map((child) => child.route);
+
+  assert.equal(rootNames.includes('listing-lab'), false);
+  assert.equal(rootNames.includes('bloom'), false);
+  assert.equal(rootNames.includes('bloom-preview'), true);
+  assert.equal(appRouteNames.includes('listing-lab'), false);
+  assert.ok(secondaryRouteNames.includes('listing-lab'));
+  assert.ok(secondaryRouteNames.includes('bloom'));
+
+  const root = liveRoot([secondary(['settings'])]);
+  const settings = readFileSync(new URL('../app/(app)/(secondary)/settings.tsx', import.meta.url), 'utf8');
+
+  assert.equal(settings.includes("'/bloom-preview'"), false);
+
+  for (const href of ['/listing-lab', '/bloom']) {
+    const { targetKey, action } = linkAction(href, 'PUSH', root);
+
+    assert.equal(targetKey, 'secondary-nav', href);
+    const inner = secondaryRouter.getStateForAction(appState(root).routes[1].state, action, options(secondaryRouteNames));
+
+    assert.deepEqual(inner.routes.map((route: Route) => route.name), ['settings', href.slice(1)]);
+    assert.deepEqual(appState(root).routes.map((route) => route.name), ['(tabs)', '(secondary)']);
+    assert.equal(appState(root).routes[0].key, 'tabs-1');
+
+    const back = secondaryRouter.getStateForAction(inner, { type: 'GO_BACK' }, options(secondaryRouteNames));
+
+    assert.deepEqual(back.routes.map((route: Route) => route.name), ['settings']);
+  }
+
+  const closed = appRouter.getStateForAction(appState(root), { type: 'GO_BACK' }, options(appRouteNames));
+
+  assert.deepEqual(closed.routes.map((route: Route) => route.name), ['(tabs)']);
+  assert.equal(closed.routes[0].key, 'tabs-1');
+
+  for (const href of ['/listing-lab', '/bloom']) {
+    const opened = parse(href);
+
+    assert.deepEqual(opened.map((route) => route.name), ['(tabs)', '(secondary)'], href);
+    assert.equal(opened[1].state?.routes[0].name, href.slice(1), href);
+  }
+});
+
+test('the root bloom preview is not an in-app push, because that leaves (app) and its cockpit sheet mounted', () => {
+  const root = liveRoot([secondary(['settings'])]);
+  const { targetKey, action } = linkAction('/bloom-preview', 'PUSH', root);
+
+  assert.equal(targetKey, 'root-nav');
+  assert.equal((action.payload as { name?: string }).name, 'bloom-preview');
+  assert.deepEqual(appState(root).routes.map((route) => route.name), ['(tabs)', '(secondary)']);
 });
 
 test('Back stays inside the secondary group, Close removes exactly that group', () => {
@@ -848,7 +909,7 @@ test('tab sheets are cockpit sheet content, so React Native presents them from t
   // Content passed as `below` is drawn inside the cockpit sheet on iOS phone. Native presentation itself needs the device.
   const files = [
     ['../app/(app)/(tabs)/freelance/index.tsx', 'function LeadCard', '<MessageSheet'],
-    ['../app/(app)/(tabs)/sell/index.tsx', 'const GRID_GAP', '<Sheet '],
+    ['../app/(app)/(tabs)/sell/index.tsx', 'function itemMoney', '<Sheet '],
   ] as const;
 
   for (const [path, end, sheet] of files) {

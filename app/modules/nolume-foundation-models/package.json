@@ -1,0 +1,6 @@
+{
+  "name": "nolume-foundation-models",
+  "version": "1.0.0",
+  "private": true,
+  "description": "On-device marketplace listing generation with Apple Foundation Models."
+}

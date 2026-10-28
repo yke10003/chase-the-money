@@ -56,6 +56,7 @@ Route::prefix('v1')->group(function () {
         Route::delete('/sell/items/{item}/photos/{photo}/edit', [SellItemController::class, 'destroyPhotoEdit']);
         Route::post('/sell/items/{item}/collages', [SellItemController::class, 'storeCollage']);
         Route::post('/sell/items/{item}/photos/{photo}/cover', [SellItemController::class, 'cover']);
+        Route::get('/sell/items/{item}/photos/{photo}/file', [SellItemController::class, 'downloadPhoto']);
         Route::post('/sell/items/{item}/comparables', [SellItemController::class, 'storeComparable']);
         Route::patch('/sell/items/{item}/comparables/{comparable}', [SellItemController::class, 'updateComparable']);
         Route::delete('/sell/items/{item}/comparables/{comparable}', [SellItemController::class, 'destroyComparable']);

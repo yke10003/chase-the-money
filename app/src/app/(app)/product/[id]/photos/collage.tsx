@@ -206,7 +206,7 @@ export default function CollageScreen() {
       </Pressable>
       <T variant="heading">{existing ? 'Edit collage' : 'Add collage'}</T>
       <T variant="body" color={color.ink2}>Tap a photo, then zoom it so it sits in the frame. Tap it again to see the collage.</T>
-      <View onTouchStart={keepSelection} style={{ width: '100%', aspectRatio: 4 / 5, flexDirection: 'row', borderRadius: 20, overflow: 'hidden' }}>
+      <View onTouchStart={keepSelection} style={{ width: '100%', maxWidth: 440, alignSelf: 'center', aspectRatio: 4 / 5, flexDirection: 'row', borderRadius: 20, overflow: 'hidden' }}>
         <View style={{ flex: 2 }}>
           <CollageSlot photo={chosen.left} zoom={slots.left.zoom} background={background} active={active === 'left'} onPress={() => pressSlot('left')} />
         </View>
@@ -258,6 +258,16 @@ export default function CollageScreen() {
     </View>
     </CockpitPage>
   );
+}
+
+function loadedSize(event: { nativeEvent: { source?: { width?: number; height?: number }; target?: { naturalWidth?: number; naturalHeight?: number } } }): { width: number; height: number } {
+  const source = event.nativeEvent.source;
+  const target = event.nativeEvent.target;
+
+  return {
+    width: source?.width || target?.naturalWidth || 0,
+    height: source?.height || target?.naturalHeight || 0,
+  };
 }
 
 function inkOn(hex: string): string {
@@ -318,11 +328,10 @@ function CollageSlot({ photo, zoom, background, active, onPress }: { photo: Sell
         <Image
           source={{ uri: mediaUrl(photo.url) }}
           onLoad={(event) => {
-            const width = event.nativeEvent.source.width;
-            const height = event.nativeEvent.source.height;
+            const size = loadedSize(event);
 
-            if (width > 0 && height > 0) {
-              setNatural({ width, height });
+            if (size.width > 0 && size.height > 0) {
+              setNatural(size);
             }
           }}
           resizeMode="cover"

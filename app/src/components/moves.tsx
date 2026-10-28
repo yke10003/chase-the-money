@@ -5,7 +5,7 @@ import Svg, { Circle } from 'react-native-svg';
 
 import type { Goal } from '@/api/types';
 import { HeroWash } from '@/components/hero-wash';
-import { MobileStage } from '@/components/score-hero';
+import { MobileStage, type ScoreAction } from '@/components/score-hero';
 import { Icon, type IconName } from '@/components/icon';
 import { GoalMeter, T, XpTag } from '@/components/ui';
 import { useLayout } from '@/design/layout';
@@ -335,6 +335,7 @@ export function CockpitFrame({
   title,
   lede,
   moves,
+  actions = [],
   aside,
   below,
 }: {
@@ -342,6 +343,8 @@ export function CockpitFrame({
   title: string;
   lede?: string;
   moves: ReactNode;
+  /** Phone sheet header. Wide layouts keep these on the hero. */
+  actions?: ScoreAction[];
   aside?: ReactNode;
   below?: ReactNode;
 }) {
@@ -351,7 +354,7 @@ export function CockpitFrame({
 
   if (layout.phone) {
     return (
-      <MobileStage title={title} hero={moves}>
+      <MobileStage title={title} hero={moves} actions={actions}>
         {below}
         {aside}
       </MobileStage>

@@ -32,7 +32,7 @@ export default function BloomPreviewScreen() {
   return <BloomPreview />;
 }
 
-function BloomPreview() {
+export function BloomPreview() {
   const router = useRouter();
   const launch = useLaunchScheme();
   const [override, setOverride] = useState<Scheme | null>(null);

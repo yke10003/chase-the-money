@@ -1,7 +1,5 @@
-import { Host, Button as SwiftButton, Image as SwiftImage } from '@expo/ui/swift-ui';
-import { accessibilityLabel, buttonBorderShape, buttonStyle, controlSize, disabled as swiftDisabled, frame, tint } from '@expo/ui/swift-ui/modifiers';
 import type { SFSymbol } from 'sf-symbols-typescript';
-import { Platform, Pressable, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 import { Icon, type IconName } from '@/components/icon';
 import { Button } from '@/components/ui';
@@ -13,7 +11,6 @@ export function GlassClose({ onPress, label = 'Close' }: { onPress: () => void; 
 }
 
 export function GlassIconButton({
-  systemName,
   icon = 'pencil',
   label,
   onPress,
@@ -28,20 +25,6 @@ export function GlassIconButton({
   size?: number;
 }) {
   const { color } = useTheme();
-  const control = size >= 44 ? controlSize('large') : controlSize('small');
-
-  if (Platform.OS === 'ios') {
-    return (
-      <Host matchContents>
-        <SwiftButton
-          onPress={onPress}
-          modifiers={[buttonStyle('glass'), buttonBorderShape('circle'), control, frame({ minWidth: size, minHeight: size }), accessibilityLabel(label), swiftDisabled(disabled)]}
-        >
-          <SwiftImage systemName={systemName} size={size >= 44 ? 15 : 14} color={color.ink} />
-        </SwiftButton>
-      </Host>
-    );
-  }
 
   return (
     <Pressable
@@ -62,21 +45,7 @@ export function GlassIconButton({
 
 /** Blue glass Save. Prominent glass is the native tinted style on iOS 26. */
 export function GlassSaveButton({ onPress, disabled = false, busy = false, label = 'Save' }: { onPress: () => void; disabled?: boolean; busy?: boolean; label?: string }) {
-  const { scheme } = useTheme();
   const inactive = disabled || busy;
-  const blue = scheme === 'dark' ? '#0A84FF' : '#007AFF';
-
-  if (Platform.OS === 'ios') {
-    return (
-      <Host matchContents>
-        <SwiftButton
-          label={busy ? 'Saving' : label}
-          onPress={onPress}
-          modifiers={[buttonStyle('glassProminent'), tint(blue), controlSize('large'), accessibilityLabel(label), swiftDisabled(inactive)]}
-        />
-      </Host>
-    );
-  }
 
   return <Button label={busy ? 'Saving' : label} disabled={inactive} busy={busy} onPress={onPress} />;
 }

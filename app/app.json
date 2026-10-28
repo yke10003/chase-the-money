@@ -70,6 +70,14 @@
           "cameraPermission": "Allow the camera so you can photograph what you're selling."
         }
       ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Allow photos so you can add pictures of what you're selling.",
+          "savePhotosPermission": "Allow saving photos so you can download pictures of what you're selling.",
+          "granularPermissions": ["photo"]
+        }
+      ],
       "expo-secure-store",
       "expo-video",
       [

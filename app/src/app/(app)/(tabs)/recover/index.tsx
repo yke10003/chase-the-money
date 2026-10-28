@@ -48,10 +48,15 @@ export default function RecoverScreen() {
   const overdue = open.filter((mission) => attentionFor(mission.next_action?.due_on) === 'overdue').length;
   const currency = open[0]?.currency ?? goal.data?.currency ?? 'EUR';
   const recovered = progress.data?.data.realized_recover_minor ?? 0;
+  const actions = [
+    { label: 'Add expected money', icon: 'plus' as const, onPress: () => navigation.startCreation('recover') },
+    { label: 'Find money', icon: 'search' as const, onPress: () => setFinding((value) => !value) },
+  ];
 
   return (
     <CockpitFrame
       title="Recover"
+      actions={actions}
       moves={
         <ScoreHero
           wash="recover"
@@ -64,10 +69,7 @@ export default function RecoverScreen() {
             ...(overdue > 0 ? [{ label: overdue === 1 ? 'overdue' : 'overdue', value: String(overdue) }] : []),
           ]}
           series={progress.data?.data.series}
-          actions={[
-            { label: 'Add expected money', icon: 'plus', onPress: () => navigation.startCreation('recover') },
-            { label: 'Find money', icon: 'search', onPress: () => setFinding((value) => !value) },
-          ]}
+          actions={actions}
         />
       }
       below={

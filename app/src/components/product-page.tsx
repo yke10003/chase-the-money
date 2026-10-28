@@ -17,6 +17,8 @@ import {
 } from '@/api/endpoints';
 import type { PlaybookOutcome, SellComparable, SellItemView } from '@/api/types';
 import { GlassClose, GlassIconButton } from '@/components/glass-close';
+import { PhotoDownloadMenu } from '@/components/photo-download-menu';
+import { SpecularIconButton } from '@/components/specular-icon-button';
 import { EditingSheet } from '@/components/editing-sheet';
 import { Icon } from '@/components/icon';
 import { ChoiceBlock, sellIcon } from '@/components/sell-flow';
@@ -381,8 +383,9 @@ function Gallery({
           </View>
         </View>
       ) : null}
-      <View style={{ position: 'absolute', right: 16, bottom: photos.length > 1 ? 32 : 16 }}>
-        <GlassIconButton systemName="pencil" label="Manage photos" onPress={onManage} />
+      <View style={{ position: 'absolute', right: 16, bottom: photos.length > 1 ? 32 : 16, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        {photos.length > 0 ? <PhotoDownloadMenu photos={photos} index={page} itemName={item.name ?? ''} itemId={item.id} /> : null}
+        <SpecularIconButton systemName="pencil" icon="pencil" label="Manage photos" onPress={onManage} />
       </View>
     </View>
   );

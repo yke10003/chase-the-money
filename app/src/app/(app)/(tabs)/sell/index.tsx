@@ -1,12 +1,13 @@
 import { useQuery } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Children, useEffect, useState, type ReactNode } from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { mediaUrl } from '@/api/client';
 import { getCurrentGoal, getDiscover, getProgress, getSellCatalog, listAllOpportunities, listSellItems } from '@/api/endpoints';
 import type { Opportunity, SellItemView } from '@/api/types';
 import { MoneyHunt } from '@/app/(app)/discover';
+import { GlassSurface, liquidGlass } from '@/components/glass';
 import { Icon } from '@/components/icon';
 import { ActionRow, CockpitFrame, Sheet } from '@/components/moves';
 import { ScoreHero } from '@/components/score-hero';
@@ -61,11 +62,23 @@ export default function SellScreen() {
   const possibleMax = open.reduce((sum, mission) => sum + (mission.potential_max_minor ?? askingMinor(mission) ?? 0), 0);
   const possibleMin = open.reduce((sum, mission) => sum + (mission.potential_min_minor ?? askingMinor(mission) ?? 0), 0);
   const possible = possibleMax > 0 ? formatAmountRange(possibleMin || null, possibleMax, currency) : null;
+  const actions = [
+    { label: 'Sell something', icon: 'plus' as const, onPress: () => navigation.startCreation('sell') },
+    {
+      label: 'Find something',
+      icon: 'search' as const,
+      onPress: () => {
+        navRequest('sell.hunt.toggle', { open: !hunt, loaded: discover.data != null });
+        setHunt(!hunt);
+      },
+    },
+  ];
 
   return (
     <>
       <CockpitFrame
         title="Sell"
+        actions={actions}
         moves={
           <ScoreHero
             wash="sell"
@@ -78,17 +91,7 @@ export default function SellScreen() {
               { label: open.length === 1 ? 'item in progress' : 'items in progress', value: String(open.length) },
             ]}
             series={progress.data?.data.series}
-            actions={[
-              { label: 'Sell something', icon: 'plus', onPress: () => navigation.startCreation('sell') },
-              {
-                label: 'Find something',
-                icon: 'search',
-                onPress: () => {
-                  navRequest('sell.hunt.toggle', { open: !hunt, loaded: discover.data != null });
-                  setHunt(!hunt);
-                },
-              },
-            ]}
+            actions={actions}
           />
         }
         below={
@@ -99,7 +102,7 @@ export default function SellScreen() {
             {offers.length > 0 ? <T variant="bodyStrong">{offers.length === 1 ? '1 offer to answer' : `${offers.length} offers to answer`}</T> : null}
             <SellBoard
               empty={open.length > 0 ? (
-                <ProductGrid columns={productColumns(layout)}>
+                <ItemList>
                   {open.map((mission) => (
                     <LegacyCard key={mission.id} mission={mission} onPress={() => {
                       if (!resumeSellSetup(mission.sell_item_id, mission.setup_done)) {
@@ -107,7 +110,7 @@ export default function SellScreen() {
                       }
                     }} />
                   ))}
-                </ProductGrid>
+                </ItemList>
               ) : listLoading ? null : (
                 <T variant="body" color={color.ink2}>Nothing for sale yet.</T>
               )}
@@ -126,28 +129,19 @@ export default function SellScreen() {
   );
 }
 
-const GRID_GAP = 10;
+const PHOTO = 52;
+const ROW_GAP = 14;
 
-/** Phone stays at two. Wider screens add a column, and stop at four. */
-function productColumns(layout: { phone: boolean; tablet: boolean }): number {
-  if (layout.phone) {
-    return 2;
-  }
-
-  if (layout.tablet) {
-    return 3;
-  }
-
-  return 4;
-}
-
-function ProductGrid({ columns, children }: { columns: number; children: ReactNode }) {
-  const basis = `${100 / columns}%`;
+/** Find My's device rows, a little taller, with a larger picture. */
+function ItemList({ children }: { children: ReactNode }) {
+  const { color } = useTheme();
+  const items = Children.toArray(children);
 
   return (
-    <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -GRID_GAP / 2 }}>
-      {Children.map(children, (child) => (
-        <View style={{ width: basis as `${number}%`, maxWidth: basis as `${number}%`, paddingHorizontal: GRID_GAP / 2, marginBottom: space.lg }}>
+    <View>
+      {items.map((child, index) => (
+        <View key={index}>
+          {index > 0 ? <View style={[styles.separator, { backgroundColor: color.line }]} /> : null}
           {child}
         </View>
       ))}
@@ -173,13 +167,40 @@ function itemStep(item: SellItemView): string {
   return item.setup_done ? item.stage_label : item.next_step_label;
 }
 
+const SELL_FILTERS = [
+  { id: 'all', label: 'All' },
+  { id: 'setting_up', label: 'Setting up' },
+  { id: 'ready', label: 'Ready' },
+  { id: 'listed', label: 'Listed' },
+  { id: 'sold', label: 'Sold' },
+] as const;
+
+type SellFilter = (typeof SELL_FILTERS)[number]['id'];
+
+function sellBucket(item: SellItemView): Exclude<SellFilter, 'all'> {
+  if (item.stage === 'sold' || item.stage === 'paid') {
+    return 'sold';
+  }
+
+  if (item.stage === 'listed' || item.stage === 'offer' || item.origin === 'listed') {
+    return 'listed';
+  }
+
+  if (!item.setup_done) {
+    return 'setting_up';
+  }
+
+  return 'ready';
+}
+
 function SellBoard({ empty }: { empty: ReactNode }) {
   const { color } = useTheme();
-  const layout = useLayout();
   const router = useRouter();
+  const [filter, setFilter] = useState<SellFilter>('all');
   const items = useQuery({ queryKey: ['sell', 'items'], queryFn: async () => (await listSellItems()).data });
   const catalog = useQuery({ queryKey: ['sell', 'catalog'], queryFn: getSellCatalog });
-  const visible = (items.data ?? []).filter(showsOnSellBoard);
+  const board = (items.data ?? []).filter(showsOnSellBoard);
+  const visible = filter === 'all' ? board : board.filter((item) => sellBucket(item) === filter);
 
   useEffect(() => {
     for (const item of items.data ?? []) {
@@ -195,16 +216,12 @@ function SellBoard({ empty }: { empty: ReactNode }) {
     return <LoadingState label="Loading what you're selling" />;
   }
 
-  if (visible.length === 0) {
-    if ((items.data ?? []).length > 0) {
-      return <T variant="body" color={color.ink2}>Nothing for sale yet.</T>;
-    }
+  const filterLabel = SELL_FILTERS.find((entry) => entry.id === filter)?.label ?? 'All';
+  let body: ReactNode;
 
-    return <>{empty}</>;
-  }
-
-  return (
-    <ProductGrid columns={productColumns(layout)}>
+  if (visible.length > 0) {
+    body = (
+    <ItemList>
       {visible.map((item) => (
         <ItemCard
           key={item.id}
@@ -223,13 +240,72 @@ function SellBoard({ empty }: { empty: ReactNode }) {
           }}
         />
       ))}
-    </ProductGrid>
+    </ItemList>
+    );
+  } else if (board.length === 0 && filter === 'all') {
+    body = (items.data ?? []).length > 0 ? <T variant="body" color={color.ink2}>Nothing for sale yet.</T> : empty;
+  } else {
+    body = <T variant="body" color={color.ink2}>Nothing in {filterLabel}.</T>;
+  }
+
+  return (
+    <View style={{ gap: space.md }}>
+      <SellFilters value={filter} onChange={setFilter} />
+      {body}
+    </View>
+  );
+}
+
+function SellFilters({ value, onChange }: { value: SellFilter; onChange: (next: SellFilter) => void }) {
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={styles.filters}
+    >
+      {SELL_FILTERS.map((entry) => (
+        <SellFilterChip
+          key={entry.id}
+          label={entry.label}
+          selected={entry.id === value}
+          onPress={() => onChange(entry.id)}
+        />
+      ))}
+    </ScrollView>
+  );
+}
+
+function SellFilterChip({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
+  const { color, scheme } = useTheme();
+  const text = (
+    <Text style={[styles.filterText, selected ? styles.filterTextOn : styles.filterTextOff, { color: selected ? color.ink : scheme === 'dark' ? '#C7C7CC' : '#6E6E73' }]}>
+      {label}
+    </Text>
+  );
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ selected }}
+      onPress={onPress}
+      hitSlop={6}
+      style={({ pressed }) => (selected && pressed && !liquidGlass ? styles.filterHeld : null)}
+    >
+      {selected ? (
+        <GlassSurface scheme={scheme} tone="bar" interactive style={styles.filterGlass}>
+          {text}
+        </GlassSurface>
+      ) : (
+        <View style={styles.filterChip}>{text}</View>
+      )}
+    </Pressable>
   );
 }
 
 function ItemCard({ item, icon, cue, onPress }: { item: SellItemView; icon: string; cue: string | null; onPress: () => void }) {
   return (
-    <ProductCard
+    <ProductRow
       title={item.name?.trim() || 'Untitled item'}
       step={itemStep(item)}
       cue={cue}
@@ -243,7 +319,7 @@ function ItemCard({ item, icon, cue, onPress }: { item: SellItemView; icon: stri
 
 function LegacyCard({ mission, onPress }: { mission: Opportunity; onPress: () => void }) {
   return (
-    <ProductCard
+    <ProductRow
       title={mission.title}
       step={mission.stage_label}
       money={formatAmountRange(mission.potential_min_minor, mission.potential_max_minor, mission.currency)}
@@ -254,7 +330,7 @@ function LegacyCard({ mission, onPress }: { mission: Opportunity; onPress: () =>
   );
 }
 
-function ProductCard({
+function ProductRow({
   title,
   step,
   cue,
@@ -279,44 +355,40 @@ function ProductCard({
       accessibilityRole="button"
       accessibilityLabel={label}
       onPress={onPress}
-      style={({ pressed }) => ({ width: '100%', opacity: pressed ? 0.72 : 1 })}
+      style={({ pressed }) => [styles.row, { opacity: pressed ? 0.72 : 1 }]}
     >
-      <View style={[styles.card, { backgroundColor: color.surface, borderColor: color.line }]}>
-        <View style={[styles.photo, { backgroundColor: color.sunken }]}>
-          {photoUrl ? (
-            <Image key={photoUrl} source={{ uri: mediaUrl(photoUrl) }} accessibilityLabel="" resizeMode="cover" style={StyleSheet.absoluteFill} />
-          ) : (
-            <View style={styles.fallback}>
-              <Icon name={sellIcon(icon)} size={64} color={color.ink} weight="duotone" />
-            </View>
-          )}
-          {cue ? (
-            <View pointerEvents="none" style={styles.cue}>
-              <Text style={styles.cueText}>{cue}</Text>
-            </View>
-          ) : null}
-        </View>
-        <View style={[styles.info, { borderTopColor: color.line }]}>
-          <Text numberOfLines={2} style={[styles.title, { color: color.ink }]}>{title}</Text>
-          <Text numberOfLines={1} style={[styles.step, { color: color.ink2 }]}>{step}</Text>
-        </View>
-        <View style={[styles.footer, { backgroundColor: color.footer, borderTopColor: color.line }]}>
-          <Text numberOfLines={1} style={[styles.money, { color: money ? color.ink : color.ink2 }]}>{money ?? 'Not valued'}</Text>
-        </View>
+      <View style={[styles.photo, { backgroundColor: color.sunken }]}>
+        {photoUrl ? (
+          <Image key={photoUrl} source={{ uri: mediaUrl(photoUrl) }} accessibilityLabel="" resizeMode="cover" style={StyleSheet.absoluteFill} />
+        ) : (
+          <View style={styles.fallback}>
+            <Icon name={sellIcon(icon)} size={26} color={color.ink} weight="duotone" />
+          </View>
+        )}
       </View>
+      <View style={styles.copy}>
+        <Text numberOfLines={1} style={[styles.title, { color: color.ink }]}>{title}</Text>
+        <Text numberOfLines={1} style={[styles.step, { color: color.ink2 }]}>{step}</Text>
+      </View>
+      {money ? <Text numberOfLines={1} style={[styles.money, { color: color.ink2 }]}>{money}</Text> : null}
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  card: { width: '100%', borderRadius: 22, borderWidth: 1, overflow: 'hidden' },
-  photo: { width: '100%', aspectRatio: 1, overflow: 'hidden' },
-  cue: { position: 'absolute', left: 8, bottom: 8, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999, backgroundColor: 'rgba(0,0,0,0.62)' },
-  cueText: { color: '#FFFFFF', fontFamily: font.semi, fontWeight: weight.semibold, fontSize: 12, lineHeight: 16 },
+  filters: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 6 },
+  filterChip: { borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8 },
+  filterGlass: { borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8, overflow: 'hidden' },
+  filterHeld: { transform: [{ scale: 1.08 }] },
+  filterText: { fontSize: 16, lineHeight: 20 },
+  filterTextOn: { fontFamily: font.semi, fontWeight: weight.semibold },
+  filterTextOff: { fontFamily: font.medium, fontWeight: weight.medium },
+  separator: { height: StyleSheet.hairlineWidth, marginLeft: PHOTO + ROW_GAP },
+  row: { flexDirection: 'row', alignItems: 'center', gap: ROW_GAP, minHeight: 64, paddingVertical: 6 },
+  photo: { width: PHOTO, height: PHOTO, borderRadius: PHOTO / 2, overflow: 'hidden' },
   fallback: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  info: { paddingHorizontal: 12, paddingTop: 10, paddingBottom: 8, gap: 2, borderTopWidth: StyleSheet.hairlineWidth, minHeight: 62 },
-  footer: { paddingHorizontal: 12, paddingVertical: 10, borderTopWidth: StyleSheet.hairlineWidth },
-  title: { fontFamily: font.semi, fontWeight: weight.semibold, fontSize: 15, lineHeight: 18 },
-  step: { fontFamily: font.body, fontWeight: weight.regular, fontSize: 13, lineHeight: 16 },
-  money: { fontFamily: font.semi, fontWeight: weight.semibold, fontSize: 15, lineHeight: 20 },
+  copy: { flex: 1, minWidth: 0, gap: 2 },
+  title: { fontFamily: font.semi, fontWeight: weight.semibold, fontSize: 17, lineHeight: 22 },
+  step: { fontFamily: font.body, fontWeight: weight.regular, fontSize: 13, lineHeight: 18 },
+  money: { flexShrink: 1, maxWidth: '38%', fontFamily: font.body, fontWeight: weight.regular, fontSize: 15, lineHeight: 20, textAlign: 'right' },
 });

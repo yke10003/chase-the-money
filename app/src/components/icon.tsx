@@ -10,6 +10,7 @@ const BarcodeIcon: PhosphorIcon = require('phosphor-react-native/src/icons/Barco
 const CameraIcon: PhosphorIcon = require('phosphor-react-native/src/icons/Camera').CameraIcon;
 const CoinsIcon: PhosphorIcon = require('phosphor-react-native/src/icons/Coins').CoinsIcon;
 const DeviceMobileIcon: PhosphorIcon = require('phosphor-react-native/src/icons/DeviceMobile').DeviceMobileIcon;
+const DownloadSimpleIcon: PhosphorIcon = require('phosphor-react-native/src/icons/DownloadSimple').DownloadSimpleIcon;
 const ImageIcon: PhosphorIcon = require('phosphor-react-native/src/icons/Image').ImageIcon;
 const PlugIcon: PhosphorIcon = require('phosphor-react-native/src/icons/Plug').PlugIcon;
 const RulerIcon: PhosphorIcon = require('phosphor-react-native/src/icons/Ruler').RulerIcon;
@@ -110,6 +111,7 @@ const ICONS = {
   camera: CameraIcon,
   coins: CoinsIcon,
   deviceMobile: DeviceMobileIcon,
+  download: DownloadSimpleIcon,
   image: ImageIcon,
   plug: PlugIcon,
   ruler: RulerIcon,

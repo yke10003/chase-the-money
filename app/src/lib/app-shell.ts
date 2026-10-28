@@ -1,6 +1,14 @@
 export type AppWrapper = 'FocusShell' | 'NativeTabWash' | 'AppShell';
 
 /**
+ * Profile can be open before a goal exists. The dev pages opened from Profile
+ * stay too, because sending them to onboarding swaps the wrapper and remounts the cockpit.
+ */
+export function openWithoutGoal(pathname: string): boolean {
+  return pathname === '/onboarding' || pathname === '/settings' || pathname === '/listing-lab' || pathname === '/bloom';
+}
+
+/**
  * The element type that hosts the (app) stack. A different type remounts the
  * whole stack, cockpit included, so on iOS phone it must not depend on the
  * route the user is on. Onboarding is outside the shell.

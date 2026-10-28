@@ -48,7 +48,7 @@ Editing photos, the listing title, or comparables again does not award more. Ski
 
 The product `name` is the identity used on Sell cards and the mission. `listing_title` is the marketplace title. It can be empty; the product name is the display fallback. Neither field overwrites the other. On Product Detail the name has its own edit sheet. The Details sheet does not include it.
 
-Apple Intelligence can later fill the description step. It is not implemented. The screen only edits the title and description.
+A development build can draft the description from the description step with four on-device styles. That draft stays in the field until Save & exit or Finish. It does not change the product name or `listing_title`. Release builds do not show the styles.
 
 ## Photos
 

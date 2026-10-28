@@ -10,10 +10,15 @@ export default function BuildScreen() {
   const { color, accent } = useTheme();
   const layout = useLayout();
   const paint = accent.build;
+  const actions = [
+    { label: 'Add a product', icon: 'plus' as const, onPress: () => navigation.startCreation('build') },
+    { label: 'Explore an idea', icon: 'lightbulb' as const, onPress: () => navigation.startCreation('build') },
+  ];
 
   return (
     <CockpitFrame
       title="Build"
+      actions={actions}
       moves={
         <ScoreHero
           wash="build"
@@ -23,10 +28,7 @@ export default function BuildScreen() {
           caption="product revenue"
           series={[{ period: '1970-01-01', amount_minor: 0 }]}
           note="No product is tracked yet. Revenue will show here when one exists."
-          actions={[
-            { label: 'Add a product', icon: 'plus', onPress: () => navigation.startCreation('build') },
-            { label: 'Explore an idea', icon: 'lightbulb', onPress: () => navigation.startCreation('build') },
-          ]}
+          actions={actions}
         />
       }
       below={<T variant="small" color={color.ink3}>Paid work for someone else is in Freelance.</T>}

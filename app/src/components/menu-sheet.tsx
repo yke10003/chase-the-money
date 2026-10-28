@@ -4,9 +4,13 @@ import { Screen, ScreenStack } from 'react-native-screens';
 
 import { SHEET_RESTING_DETENT } from '@/lib/cockpit-scene';
 import { navLog, screenLifecycleLog } from '@/lib/nav-log';
+import { useTheme } from '@/state/theme';
 
 const cockpitLog = __DEV__ ? screenLifecycleLog('cockpit') : {};
 const stackFinished = __DEV__ ? () => navLog('native.menusheet.finishTransitioning') : undefined;
+
+/** Opaque sheet fill. A clear fill lets iOS 26 draw Liquid Glass through the sheet. */
+const sheetFill = { light: '#FFFFFF', dark: '#18181A' } as const;
 
 /**
  * One form sheet for the whole cockpit. Detent 1 is UIKit's maximum, already
@@ -22,13 +26,13 @@ const stackFinished = __DEV__ ? () => navLog('native.menusheet.finishTransitioni
  */
 export function MenuSheet({
   children,
-  paper,
   onDetent,
 }: {
   children: ReactNode;
-  paper: string;
   onDetent: (index: number) => void;
 }) {
+  const { scheme } = useTheme();
+
   return (
     <ScreenStack style={StyleSheet.absoluteFill} pointerEvents="box-none" onFinishTransitioning={stackFinished}>
       <Screen activityState={2} pointerEvents="none" style={{ flex: 1, backgroundColor: 'transparent' }} />
@@ -50,7 +54,7 @@ export function MenuSheet({
 
           onDetent(event.nativeEvent.index);
         }}
-        style={{ flex: 1, backgroundColor: paper }}
+        style={{ flex: 1, backgroundColor: sheetFill[scheme] }}
       >
         {children}
       </Screen>

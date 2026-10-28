@@ -1,0 +1,26 @@
+---
+description: Classify a new screen's navigation owner before implementing it. The contract is docs/technical/navigation.md.
+alwaysApply: true
+---
+
+# Navigation ownership
+
+Read `docs/technical/navigation.md` before adding or moving a screen. On iOS phone the `(app)` stack is the only owner of temporary screens above the cockpit. `MenuSheet` presents the cockpit sheet once. Do not add another native modal owner.
+
+Before writing the screen, name its navigator, who presents it, and what enter and back do. Reuse the cockpit, root, secondary, and creation conventions.
+
+- A screen opened from Profile, Progress, or a mission is a push inside `(secondary)`. That group is already the one full-screen modal above the cockpit. Back pops inside the group. Close removes that one modal.
+- A screen that must cover the cockpit from a tab is an `(app)` `fullScreenModal` via `secondaryPresentation`, and only when no other top-level route is open. Close flows the coordinator already owns through `navigation.ts`.
+- Root routes (`login`, `bloom-preview`) render when `(app)` is not mounted. A root card pushed while `(app)` is mounted leaves the cockpit sheet presented. Do not put an in-app tool there, and do not hide that sheet with a pathname check in the root gate.
+
+```tsx
+// Wrong: root card. (app) stays mounted, so the sheet stays on top.
+router.push('/listing-lab'); // file at app/listing-lab.tsx
+
+// Right: push inside the secondary modal that is already above the sheet.
+router.push('/listing-lab'); // file at app/(app)/(secondary)/listing-lab.tsx
+```
+
+Do not dismiss or remount the cockpit to reveal a page. Do not pop two modals in one update. That orphans a controller.
+
+Add a router test in `app/src/lib/app-shell.test.ts` for the enter and back state. Native presentation still needs an iPhone 16 Pro check: the sheet, the tab bar, and that leaving does not orphan a controller. Say that explicitly.
